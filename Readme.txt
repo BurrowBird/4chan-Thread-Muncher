@@ -10,9 +10,6 @@ You may close the tab from where you clicked the icon.
 I am not a programmer. Muncher is 99 % vibe coded, using free versions of Grok, Claude and Gemini.
 Muncher has some quirks.
 
-The buttons are not very responsive.
-Wait a few seconds. Click the button again. Press F5 a few times. Repeat.
-
 Muncher tries to prevent downloading duplicates by various means.
 If you want to redownload the same thread twice, use the Forget button.
 
