@@ -13,12 +13,20 @@ document.addEventListener("DOMContentLoaded", () => {
   const threadsDiv = document.getElementById("threads");
 
   let refreshInterval = null;
-  let darkMode = localStorage.getItem("darkMode") === "true";
+  // Check localStorage; if no value exists (null), default to true (dark mode)
+  let darkMode = localStorage.getItem("darkMode") === null ? true : localStorage.getItem("darkMode") === "true";
 
+  // Apply dark mode immediately based on the initialized value
   if (darkMode) {
     document.body.classList.add("dark-mode");
     modeToggleBtn.textContent = "Light Mode";
+  } else {
+    document.body.classList.remove("dark-mode"); // Explicitly ensure light mode is off
+    modeToggleBtn.textContent = "Dark Mode";
   }
+
+  // Save the initial dark mode setting to localStorage
+  localStorage.setItem("darkMode", darkMode);
 
   chrome.windows.getCurrent((window) => {
     chrome.runtime.sendMessage({ type: "setWindowId", windowId: window.id });
@@ -279,7 +287,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  modeToggleBtn.addEventListener("click", () => {
+modeToggleBtn.addEventListener("click", () => {
     darkMode = !darkMode;
     localStorage.setItem("darkMode", darkMode);
 
