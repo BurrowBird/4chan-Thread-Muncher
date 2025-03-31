@@ -14,7 +14,6 @@ The buttons are not very responsive.
 Wait a few seconds. Click the button again. Press F5 a few times. Repeat.
 
 If you want to redownload the same thread twice, you can't.
-I'll ask Grok to fix that.
 
 You can add threads by ID or via a search (within a board).
 Auto-following threads is not implemented.
