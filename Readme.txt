@@ -1,6 +1,7 @@
-Chrome extension.
+4chan-Thread-Muncher-9000 is a chrome extension that uses API to monitor and download media from 4chan.
 
-Load the extension.
+----
+
 Click the extension icon to open the Muncher window.
 You may close the tab from where you clicked the icon. 
 
