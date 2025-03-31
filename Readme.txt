@@ -13,7 +13,8 @@ Muncher has some quirks.
 The buttons are not very responsive.
 Wait a few seconds. Click the button again. Press F5 a few times. Repeat.
 
-If you want to redownload the same thread twice, you can't.
+Muncher tries to prevent downloading duplicates by various means.
+If you want to redownload the same thread twice, use the Forget button.
 
 You can add threads by ID or via a search (within a board).
 Auto-following threads is not implemented.
