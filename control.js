@@ -23,14 +23,6 @@ document.addEventListener("DOMContentLoaded", () => {
   chrome.windows.getCurrent((window) => {
     chrome.runtime.sendMessage({ type: "setWindowId", windowId: window.id });
   });
-
-  chrome.runtime.sendMessage({ type: "forgetDownloaded" }, (response) => {
-    if (response.success) {
-      appendLog("Forgot all downloaded images on startup.", "info");
-    } else {
-      appendLog("Failed to forget downloaded images on startup.", "error");
-    }
-  });
   
   function appendLog(message, type) {
     const p = document.createElement("p");
