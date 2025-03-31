@@ -7,7 +7,7 @@ You may close the tab from where you clicked the icon.
 
 ----
 
-I am not a programmer. Muncher is 99 % vibe coded, using free versions of Grok, Claude and Gemini.
+Muncher is 99 % vibe coded, using free versions of Grok, Claude and Gemini.
 Muncher has some quirks. Feel free to fix them.
 
 Muncher tries to prevent downloading duplicates by various means.
