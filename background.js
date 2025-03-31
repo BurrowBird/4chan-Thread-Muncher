@@ -5,7 +5,7 @@ let activeDownloads = new Map();
 let downloadLocks = new Map();
 let openerTabId = null;
 let windowId = null;
-let lastSearchParams = { board: '', searchTerm: '', downloadPath: '4chan_downloads' }; // Standardized default
+let lastSearchParams = { board: '', searchTerm: '', downloadPath: '4chan_downloads' };
 let threadProgressTimers = new Map();
 
 const RATE_LIMIT_MS = 1500;
@@ -113,7 +113,7 @@ async function downloadImage(url, threadId, username) {
             conflictAction: 'uniquify'
           }, resolve);
         });
-        if (!downloadId) throw new Error("Download initiation failed");
+        if (!downloadId || !Number.isInteger(downloadId)) throw new Error("Download initiation failed or invalid ID");
 
         activeDownloads.set(downloadKey, downloadId);
 
@@ -565,7 +565,7 @@ function startScraping(board, searchTerm, threadId, tabId, downloadPath) {
   log(`startScraping: board=${board}, searchTerm=${searchTerm}, threadId=${threadId}, tabId=${tabId}, downloadPath=${downloadPath}`, "info");
   isRunning = true;
   openerTabId = tabId;
-  lastSearchParams.downloadPath = downloadPath || "4chan_downloads"; // Standardized default
+  lastSearchParams.downloadPath = downloadPath || "4chan_downloads";
   chrome.storage.local.set({ lastSearchParams, isRunning });
   const startPromise = threadId ? addThreadById(board, threadId) : searchAndWatchThreads(board, searchTerm);
   startPromise.then(() => {
@@ -586,11 +586,24 @@ function stopScraping() {
     }
   });
   chrome.storage.local.set({ watchedThreads });
-  activeDownloads.forEach((downloadId) => chrome.downloads.cancel(downloadId));
+  activeDownloads.forEach((downloadId, key) => {
+    if (Number.isInteger(downloadId)) {
+      chrome.downloads.cancel(downloadId, () => {
+        if (chrome.runtime.lastError) {
+          log(`Failed to cancel download ${downloadId}: ${chrome.runtime.lastError.message}`, "warning");
+        } else {
+          log(`Canceled download ${downloadId}`, "info");
+        }
+      });
+    } else {
+      log(`Invalid downloadId in activeDownloads: ${downloadId} for key ${key}`, "error");
+    }
+    activeDownloads.delete(key);
+  });
   activeDownloads.clear();
   isRunning = watchedThreads.some(t => t.active && !t.closed);
   chrome.storage.local.set({ isRunning });
-  log("All threads paused.", "warning");
+  log("All threads paused and downloads canceled.", "warning");
   debouncedUpdateUI();
 }
 
@@ -653,7 +666,17 @@ function toggleThread(threadId) {
     log(`Thread "${thread.title}" (${threadId}) paused`, "info");
     activeDownloads.forEach((downloadId, key) => {
       if (key.startsWith(`${threadId}-`)) {
-        chrome.downloads.cancel(downloadId);
+        if (Number.isInteger(downloadId)) {
+          chrome.downloads.cancel(downloadId, () => {
+            if (chrome.runtime.lastError) {
+              log(`Failed to cancel download ${downloadId} for thread ${threadId}: ${chrome.runtime.lastError.message}`, "warning");
+            } else {
+              log(`Canceled download ${downloadId} for thread ${threadId}`, "info");
+            }
+          });
+        } else {
+          log(`Invalid downloadId in activeDownloads: ${downloadId} for key ${key}`, "error");
+        }
         activeDownloads.delete(key);
       }
     });
@@ -692,7 +715,13 @@ function closeThread(threadId) {
 
     activeDownloads.forEach((downloadId, key) => {
       if (key.startsWith(`${threadId}-`)) {
-        chrome.downloads.cancel(downloadId);
+        if (Number.isInteger(downloadId)) {
+          chrome.downloads.cancel(downloadId, () => {
+            if (chrome.runtime.lastError) {
+              log(`Failed to cancel download ${downloadId} for thread ${threadId}: ${chrome.runtime.lastError.message}`, "warning");
+            }
+          });
+        }
         activeDownloads.delete(key);
       }
     });
@@ -720,7 +749,13 @@ function removeThread(threadId) {
   if (thread) {
     activeDownloads.forEach((downloadId, key) => {
       if (key.startsWith(`${threadId}-`)) {
-        chrome.downloads.cancel(downloadId);
+        if (Number.isInteger(downloadId)) {
+          chrome.downloads.cancel(downloadId, () => {
+            if (chrome.runtime.lastError) {
+              log(`Failed to cancel download ${downloadId} for thread ${threadId}: ${chrome.runtime.lastError.message}`, "warning");
+            }
+          });
+        }
         activeDownloads.delete(key);
       }
     });
