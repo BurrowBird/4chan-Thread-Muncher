@@ -1,9 +1,34 @@
+Chrome extension.
+
+Load the extension.
+Click the extension icon to open the Muncher window.
+You may close the tab from where you clicked the icon. 
+
+----
+
+I am not a programmer. Muncher is 99 % vibe coded, using free versions of Grok, Claude and Gemini.
+Muncher has some quirks.
+
+The buttons are not very responsive.
+Wait a few seconds. Click the button again. Press F5 a few times. Repeat.
+
+If you want to redownload the same thread twice, you can't.
+I'll ask Grok to fix that.
+
+You can add threads by ID or via a search (within a board).
+Auto-following threads is not implemented.
+But auto-adding threads based on last search is.
+
+----
+
+Muncher uses 4chan API, not HTML crawling.
 In background.js, you might want to adjust these values:
 
 ✱ const RATE_LIMIT_MS = 1500;
 Delay between downloading images in ms.
-Adjust at risk of IP banned by 4chan.
+Does not take into account parallel downloads.
+Adjust at risk of provoking 4chan.
 
 ✱ const MAX_CONCURRENT_THREADS = 5;
 Number of max threads running at the same time.
-Adjust at risk of IP banned by 4chan.
+Adjust at risk of provoking 4chan.
