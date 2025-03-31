@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>4chan Thread Muncher 9000</title>
+  <style>
+    :root {
+      --bg-color: #ffffff;
+      --text-color: #333333;
+      --border-color: #cccccc;
+      --input-bg: #ffffff;
+      --button-bg: #f0f0f0;
+      --button-hover: #e0e0e0;
+      --log-bg: #ffffff;
+    }
+
+    body.dark-mode {
+      --bg-color: #1e1e2e;
+      --text-color: #cdd6f4;
+      --border-color: #313244;
+      --input-bg: #181825;
+      --button-bg: #313244;
+      --button-hover: #45475a;
+      --log-bg: #181825;
+    }
+
+    body { 
+      padding: 10px; 
+      font-family: Arial; 
+      transition: background-color 0.3s ease, color 0.3s ease;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+    }
+
+    #header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    #title {
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    #log { 
+      height: 120px; 
+      overflow-y: scroll; 
+      border: 1px solid var(--border-color); 
+      padding: 5px; 
+      font-size: 12px; 
+      background-color: var(--log-bg);
+      border-radius: 4px;
+    }
+
+    .log-entry { margin: 2px 0; }
+    .info { color: #8ab4f8; }
+    .success { color: #81c995; font-weight: bold; }
+    .warning { color: #fdd663; }
+    .error { color: #f28b82; }
+
+    button { 
+      margin: 5px; 
+      padding: 5px 10px; 
+      background-color: var(--button-bg);
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    button:hover {
+      background-color: var(--button-hover);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    input { 
+      margin: 5px; 
+      padding: 8px; 
+      width: calc(100% - 20px); 
+      background-color: var(--input-bg);
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+    }
+
+    #timer { 
+      margin: 5px; 
+      font-size: 14px; 
+      color: var(--text-color); 
+      opacity: 0.8;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+	#thread-count {
+	  display: block;
+	  text-align: center;
+	  font-size: 12px;
+	  color: var(--text-color);
+	  margin: 10px 0;
+	  display: flex; 
+		flex-direction: row; 
+	}
+
+    #threads { 
+      margin: 5px; 
+    }
+
+    .thread { 
+      display: flex; 
+      align-items: flex-start; 
+      margin: 10px 0; 
+      padding: 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      background-color: var(--input-bg);
+    }
+
+    .thread-details { 
+      flex: 1; 
+    }
+
+    .thread-buttons { 
+      display: flex; 
+      flex-direction: row; 
+    }
+
+    .thread-buttons button { 
+      margin: 0 5px; 
+      padding: 3px 6px; 
+      width: 80px; 
+    }
+
+    .thread-count-active { color: #81c995; margin-right: 5px; font-weight: bold; }
+    .thread-count-paused { color: #fdd663; margin-right: 5px; font-weight: bold; }
+    .thread-count-error { color: #f28b82; margin-right: 5px; font-weight: bold; }
+    .thread-count-closed { color: #808080; margin-right: 5px; font-weight: bold; }
+    
+    .thread-closed { color: #808080; }
+    .thread-status { margin-left: 5px; font-style: italic; }
+    .thread-creation { margin-left: 10px; font-size: 12px; opacity: 0.7; }
+
+    .action-buttons {
+      display: flex;
+      justify-content: space-between;
+      margin: 10px 0;
+    }
+
+    .action-buttons-left, .action-buttons-right {
+      display: flex;
+    }
+
+    #modeToggle {
+      background-color: var(--button-bg);
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    #modeToggle:hover {
+      background-color: var(--button-hover);
+    }
+
+    hr {
+      border: none;
+      border-top: 1px solid var(--border-color);
+      margin: 15px 0;
+    }
+	
+    .thread-archived {
+      color: #a78bfa; /* Purple for archived threads */
+    }
+    .thread-deleted {
+      color: #f87171; /* Red for deleted threads */
+    }
+    .thread-status-archived {
+      color: #a78bfa;
+    }
+    .thread-status-deleted {
+      color: #f87171;
+    }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <div id="title">4chan Thread Muncher 9000</div>
+    <button id="modeToggle">Dark Mode</button>
+  </div>
+  <input type="text" id="downloadPath" placeholder="Enter download path (e.g., 4chan_downloads)">
+  <input type="text" id="searchTerm" placeholder="Enter search term (regex supported)">
+  <input type="text" id="threadId" placeholder="Enter thread ID (e.g., 933070267)">
+	<input type="text" id="board" placeholder="Enter board (e.g., b)">
+	<div class="action-buttons">
+	  <div class="action-buttons-left">
+		<button id="startBtn">Add Threads</button>
+		<button id="pauseAllBtn">Pause All</button>
+		<button id="resumeAllBtn">Resume All</button>
+		<span id="thread-count">0 of 5 Active Threads</span>
+	  </div>
+	  <div class="action-buttons-right">
+		<button id="forgetBtn">Forget</button>
+	  </div>
+	</div>
+  <div id="threads"></div>
+  <div id="log"></div>
+  <script src="control.js"></script>
+</body>
+</html>
