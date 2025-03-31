@@ -6,7 +6,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const startBtn = document.getElementById("startBtn");
   const pauseAllBtn = document.getElementById("pauseAllBtn");
   const resumeAllBtn = document.getElementById("resumeAllBtn");
-  const forgetBtn = document.getElementById("forgetBtn");
   const modeToggleBtn = document.getElementById("modeToggle");
   const logDiv = document.getElementById("log");
   const timerDiv = document.getElementById("timer");
@@ -25,7 +24,6 @@ document.addEventListener("DOMContentLoaded", () => {
     chrome.runtime.sendMessage({ type: "setWindowId", windowId: window.id });
   });
 
-  // Call forgetDownloadedImages on startup
   chrome.runtime.sendMessage({ type: "forgetDownloaded" }, (response) => {
     if (response.success) {
       appendLog("Forgot all downloaded images on startup.", "info");
@@ -78,99 +76,136 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function renderThreads(threads) {
-    threadsDiv.innerHTML = "";
+    // Sort threads by time (newest first)
+    const sortedThreads = threads.sort((a, b) => b.time - a.time);
+    
+    // Separate active and inactive threads
+    const activeThreads = sortedThreads.filter(t => t.active && !t.closed);
+    const inactiveThreads = sortedThreads.filter(t => !t.active || t.closed);
 
-    const activeThreads = threads.filter(t => !t.closed);
-    const closedThreads = threads.filter(t => t.closed);
+    const existingThreads = new Map(
+      Array.from(threadsDiv.children)
+        .filter(div => div.classList.contains("thread"))
+        .map(div => [parseInt(div.querySelector(".thread-details span:nth-child(2)").textContent.match(/\d+/)[0]), div])
+    );
 
+    // Clear current threadsDiv content
+    threadsDiv.innerHTML = '';
+
+    // Render active threads
     activeThreads.forEach(thread => {
+      renderThread(thread, existingThreads);
+    });
+
+    // Add separator if there are both active and inactive threads
+    if (activeThreads.length > 0 && inactiveThreads.length > 0) {
+      const separator = document.createElement("hr");
+      separator.className = "thread-separator";
+      threadsDiv.appendChild(separator);
+    }
+
+    // Render inactive threads
+    inactiveThreads.forEach(thread => {
+      renderThread(thread, existingThreads);
+    });
+
+    // Remove threads that no longer exist
+    existingThreads.forEach((div, id) => {
+      if (!sortedThreads.some(t => t.id === id)) div.remove();
+    });
+  }
+
+  function renderThread(thread, existingThreads) {
+    const threadId = thread.id;
+    const existingDiv = existingThreads.get(threadId);
+    const isClosed = thread.closed;
+
+    if (existingDiv) {
+      // Update existing thread
+      const countSpan = existingDiv.querySelector(".thread-count-active, .thread-count-paused, .thread-count-error, .thread-count-closed");
+      countSpan.textContent = `(${thread.downloadedCount || 0} of ${thread.totalImages || 0})`;
+      countSpan.className = thread.active ? "thread-count-active" : thread.error ? "thread-count-error" : isClosed ? "thread-count-closed" : "thread-count-paused";
+      const statusSpan = existingDiv.querySelector(".thread-details span:nth-child(2)");
+      statusSpan.textContent = `${thread.title} (${thread.id})`;
+      statusSpan.className = isClosed ? "thread-closed" : thread.error ? "error" : thread.active ? "info" : "warning";
+      const toggleBtn = existingDiv.querySelector(".toggleBtn");
+      toggleBtn.textContent = thread.active ? "Pause" : thread.error ? "Retry" : "Resume";
+      const closeBtn = existingDiv.querySelector(".closeBtn");
+      closeBtn.disabled = isClosed;
+      const statusElement = existingDiv.querySelector(".thread-status");
+      if (isClosed && !statusElement) {
+        const newStatus = document.createElement("span");
+        newStatus.className = "thread-status";
+        newStatus.textContent = "Closed";
+        existingDiv.querySelector(".thread-details").appendChild(newStatus);
+      } else if (!isClosed && statusElement) {
+        statusElement.remove();
+      }
+      threadsDiv.appendChild(existingDiv); // Re-append to maintain order
+    } else {
+      // Add new thread
       const div = document.createElement("div");
       div.className = "thread";
-      const count = thread.downloadedCount || 0;
-      const total = thread.totalImages || 0;
-
-      let countClass = thread.active ? "thread-count-active" : thread.error ? "thread-count-error" : "thread-count-paused";
-      let threadStatusClass = thread.error ? "error" : thread.active ? "info" : "warning";
-
       div.innerHTML = `
         <div class="thread-details">
-          <span class="${countClass}">(${count} of ${total})</span>
-          <span class="${threadStatusClass}">${thread.title} (${thread.id})</span>
+          <span class="${thread.active ? 'thread-count-active' : thread.error ? 'thread-count-error' : isClosed ? 'thread-count-closed' : 'thread-count-paused'}">(${thread.downloadedCount || 0} of ${thread.totalImages || 0})</span>
+          <span class="${isClosed ? 'thread-closed' : thread.error ? 'error' : thread.active ? 'info' : 'warning'}">${thread.title} (${thread.id})</span>
           <span class="thread-creation">${formatDate(thread.time)}</span>
+          ${isClosed ? '<span class="thread-status">Closed</span>' : ''}
         </div>
         <div class="thread-buttons">
           <button class="toggleBtn">${thread.active ? "Pause" : thread.error ? "Retry" : "Resume"}</button>
-          <button class="closeBtn" ${thread.closed ? 'disabled' : ''}>Close</button>
+          <button class="closeBtn" ${isClosed ? 'disabled' : ''}>Close</button>
           <button class="removeBtn">Remove</button>
+          <button class="forgetBtn">Forget</button>
         </div>
       `;
-
-      const toggleBtn = div.querySelector(".toggleBtn");
-      const closeBtn = div.querySelector(".closeBtn");
-      const removeBtn = div.querySelector(".removeBtn");
-
-      toggleBtn.addEventListener("click", () => {
-        chrome.runtime.sendMessage({ type: "toggleThread", threadId: thread.id }, () => {
-          // Force immediate status update after toggle
-          chrome.runtime.sendMessage({ type: "getStatus" }, (status) => {
-            if (status) updateUI(status);
-          });
-        });
-      });
-      closeBtn.addEventListener("click", () => {
-        chrome.runtime.sendMessage({ type: "closeThread", threadId: thread.id });
-      });
-      removeBtn.addEventListener("click", () => {
-        chrome.runtime.sendMessage({ type: "removeThread", threadId: thread.id });
-      });
-
+      attachButtonListeners(div, thread);
       threadsDiv.appendChild(div);
+    }
+  }
+
+  function attachButtonListeners(div, thread) {
+    const toggleBtn = div.querySelector(".toggleBtn");
+    const closeBtn = div.querySelector(".closeBtn");
+    const removeBtn = div.querySelector(".removeBtn");
+    const forgetBtn = div.querySelector(".forgetBtn");
+
+    toggleBtn.addEventListener("click", async () => {
+      await chrome.runtime.sendMessage({ type: "toggleThread", threadId: thread.id });
+      chrome.runtime.sendMessage({ type: "getStatus" }, (status) => {
+        if (status) updateUI(status);
+      });
     });
 
-    if (activeThreads.length > 0 && closedThreads.length > 0) {
-      threadsDiv.appendChild(document.createElement("hr"));
-    }
-
-    closedThreads.forEach(thread => {
-      const div = document.createElement("div");
-      div.className = "thread";
-      const count = thread.downloadedCount || 0;
-      const total = thread.totalImages || 0;
-
-      div.innerHTML = `
-        <div class="thread-details">
-          <span class="thread-count-closed">(${count} of ${total})</span>
-          <span class="thread-closed">${thread.title} (${thread.id})</span>
-          <span class="thread-creation">${formatDate(thread.time)}</span>
-          <span class="thread-status">Closed</span>
-        </div>
-        <div class="thread-buttons">
-          <button class="toggleBtn">Resume</button>
-          <button class="closeBtn" disabled>Close</button>
-          <button class="removeBtn">Remove</button>
-        </div>
-      `;
-
-      const toggleBtn = div.querySelector(".toggleBtn");
-      const removeBtn = div.querySelector(".removeBtn");
-
-      toggleBtn.addEventListener("click", () => {
-        chrome.runtime.sendMessage({ type: "toggleThread", threadId: thread.id }, () => {
-          chrome.runtime.sendMessage({ type: "getStatus" }, (status) => {
-            if (status) updateUI(status);
-          });
-        });
+    closeBtn.addEventListener("click", async () => {
+      await chrome.runtime.sendMessage({ type: "closeThread", threadId: thread.id });
+      chrome.runtime.sendMessage({ type: "getStatus" }, (status) => {
+        if (status) updateUI(status);
       });
-      removeBtn.addEventListener("click", () => {
-        chrome.runtime.sendMessage({ type: "removeThread", threadId: thread.id });
-      });
+    });
 
-      threadsDiv.appendChild(div);
+    removeBtn.addEventListener("click", async () => {
+      await chrome.runtime.sendMessage({ type: "removeThread", threadId: thread.id });
+      chrome.runtime.sendMessage({ type: "getStatus" }, (status) => {
+        if (status) updateUI(status);
+      });
+    });
+
+    forgetBtn.addEventListener("click", async () => {
+      await chrome.runtime.sendMessage({ type: "forgetThreadDownloads", threadId: thread.id }, (response) => {
+        if (response.success) {
+          appendLog(`Forgot downloads for thread "${thread.title}" (${thread.id})`, "info");
+        }
+      });
+      chrome.runtime.sendMessage({ type: "getStatus" }, (status) => {
+        if (status) updateUI(status);
+      });
     });
   }
 
   function updateUI(status) {
-    startBtn.textContent = "Add Threads"; // Always "Add Threads"
+    startBtn.textContent = "Add Threads";
     const hasActiveThreads = status.watchedThreads.some(t => t.active);
     pauseAllBtn.disabled = !hasActiveThreads;
 
@@ -194,12 +229,11 @@ document.addEventListener("DOMContentLoaded", () => {
     chrome.runtime.sendMessage({ type: "getStatus" }, (status) => {
       if (status) {
         updateUI(status);
-        // Force re-processing of active threads if they appear stuck
         status.watchedThreads.forEach(thread => {
           if (thread.active && !thread.closed && !thread.error) {
-            chrome.runtime.sendMessage({ type: "toggleThread", threadId: thread.id }); // Pause
+            chrome.runtime.sendMessage({ type: "toggleThread", threadId: thread.id });
             setTimeout(() => {
-              chrome.runtime.sendMessage({ type: "toggleThread", threadId: thread.id }); // Resume
+              chrome.runtime.sendMessage({ type: "toggleThread", threadId: thread.id });
             }, 100);
           }
         });
@@ -208,14 +242,10 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   chrome.runtime.sendMessage({ type: "getLastSearchParams" }, (params) => {
-    if (params && params.board) {
-      boardInput.value = params.board;
-    }
-    if (params && params.searchTerm) {
-      searchTermInput.value = params.searchTerm;
-    }
-    if (params && params.downloadPath) {
-      downloadPathInput.value = params.downloadPath;
+    if (params) {
+      boardInput.value = params.board || '';
+      searchTermInput.value = params.searchTerm || '';
+      downloadPathInput.value = params.downloadPath || '4chan_downloads';
     }
   });
 
@@ -223,35 +253,37 @@ document.addEventListener("DOMContentLoaded", () => {
     if (status) updateUI(status);
   });
 
-  startBtn.addEventListener("click", () => {
+  startBtn.addEventListener("click", async () => {
     const searchTerm = searchTermInput.value.trim();
     const threadId = threadIdInput.value.trim();
     const board = boardInput.value.trim();
     const downloadPath = downloadPathInput.value.trim() || "4chan_downloads";
     if (board && (searchTerm || threadId)) {
-      chrome.runtime.sendMessage({ type: "start", searchTerm, threadId, board, downloadPath });
+      await chrome.runtime.sendMessage({ type: "start", searchTerm, threadId, board, downloadPath });
+      appendLog(`Started scraping: board=${board}, searchTerm=${searchTerm}, threadId=${threadId}, path=${downloadPath}`, "info");
+      chrome.runtime.sendMessage({ type: "getStatus" }, (status) => {
+        if (status) updateUI(status);
+      });
     } else {
       appendLog("Please enter a board and either a search term or thread ID.", "error");
     }
   });
 
-  pauseAllBtn.addEventListener("click", () => {
-    chrome.runtime.sendMessage({ type: "stop" });
+  pauseAllBtn.addEventListener("click", async () => {
+    await chrome.runtime.sendMessage({ type: "stop" });
+    chrome.runtime.sendMessage({ type: "getStatus" }, (status) => {
+      if (status) updateUI(status);
+    });
   });
 
-  resumeAllBtn.addEventListener("click", () => {
-    chrome.runtime.sendMessage({ type: "resumeAll" }, (response) => {
+  resumeAllBtn.addEventListener("click", async () => {
+    await chrome.runtime.sendMessage({ type: "resumeAll" }, (response) => {
       if (response.success) {
         appendLog("Resumed all paused threads.", "info");
       }
     });
-  });
-
-  forgetBtn.addEventListener("click", () => {
-    chrome.runtime.sendMessage({ type: "forgetDownloaded" }, (response) => {
-      if (response.success) {
-        appendLog("Forgot all downloaded images.", "info");
-      }
+    chrome.runtime.sendMessage({ type: "getStatus" }, (status) => {
+      if (status) updateUI(status);
     });
   });
 
