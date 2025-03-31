@@ -14,8 +14,7 @@ Muncher tries to prevent downloading duplicates by various means.
 If you want to redownload the same thread twice, use the Forget buttons.
 
 You can add threads by ID or via a search (within a board).
-Auto-following threads is not implemented.
-But auto-adding threads based on last search is.
+Auto-adding threads is based on the last search.
 
 ----
 
