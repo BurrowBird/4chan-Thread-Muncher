@@ -315,6 +315,7 @@ function keepThreadsAlive() {
       chrome.storage.local.set({ isRunning });
     }
   }, 60000);
+  checkForNewThreads()
 }
 
 keepThreadsAlive();
@@ -659,7 +660,7 @@ function toggleThread(threadId) {
     return;
   }
 
-  log(`Toggling thread ${threadId}: active=${thread.active}, error=${thread.error}, closed=${thread.closed}`, "info");
+  //Disabled Log: log(`Toggling thread ${threadId}: active=${thread.active}, error=${thread.error}, closed=${thread.closed}`, "info");
 
   if (thread.active) {
     thread.active = false;
