@@ -4,6 +4,7 @@
 
 Click the extension icon to open the Muncher window.
 You may close the tab from where you clicked the icon. 
+If the constant downloads are annoying, you can disable chrome's download thingy with another extension (search "Disable Download Shelf" or something similar).
 
 ----
 
@@ -20,6 +21,7 @@ Auto-adding threads is based on the last search.
 
 KNOWN ISSUES:
 When out of focus, Muncher tends to forget what it was doing.
+Downloads popping up are annoying.
 
 -----
 
