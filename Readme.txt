@@ -4,7 +4,7 @@
 
 Click the extension icon to open the Muncher window.
 You may close the tab from where you clicked the icon. 
-If the constant downloads are annoying, you can disable chrome's download thingy with another extension (search "Disable Download Shelf" or something similar).
+If the constant download popups are annoying, you can disable chrome's download thingy with another extension (search "Disable Download Shelf" or something similar).
 
 ----
 
