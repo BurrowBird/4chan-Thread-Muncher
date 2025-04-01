@@ -336,7 +336,7 @@ function monitorThreadProgress() {
             threadProgressTimers.set(key, Date.now());
           } else {
             const startTime = threadProgressTimers.get(key);
-            if (Date.now() - startTime >= 120000) {
+            if (Date.now() - startTime >= 180000) {
               thread.active = false;
               log(`Thread "${thread.title}" (${thread.id}) stalled at ${downloaded}/${total}, pausing`, "info");
               chrome.storage.local.set({ watchedThreads });
@@ -420,7 +420,7 @@ chrome.runtime.onStartup.addListener(() => {
 async function checkForNewThreads() {
   const activeThreadCount = watchedThreads.filter(t => t.active && !t.error && !t.closed).length;
   if (activeThreadCount < MAX_CONCURRENT_THREADS && lastSearchParams.board && lastSearchParams.searchTerm) {
-    log(`checkForNewThreads: Looking for new threads. Current active: ${activeThreadCount}/${MAX_CONCURRENT_THREADS}`, "info");
+    //Disabled Log: log(`checkForNewThreads: Looking for new threads. Current active: ${activeThreadCount}/${MAX_CONCURRENT_THREADS}`, "info");
     await searchAndWatchThreads(lastSearchParams.board, lastSearchParams.searchTerm);
   } else {
     log(`checkForNewThreads skipped: active=${activeThreadCount}, board=${lastSearchParams.board}, searchTerm=${lastSearchParams.searchTerm}`, "info");
@@ -664,7 +664,7 @@ function toggleThread(threadId) {
 
   if (thread.active) {
     thread.active = false;
-    log(`Thread "${thread.title}" (${threadId}) paused`, "info");
+    //Disable Log: log(`Thread "${thread.title}" (${threadId}) paused`, "info");
     activeDownloads.forEach((downloadId, key) => {
       if (key.startsWith(`${threadId}-`)) {
         if (Number.isInteger(downloadId)) {
@@ -734,8 +734,6 @@ function closeThread(threadId) {
 
     if (activeCountBefore === 1 && thread.active) {
       log(`Last active thread "${thread.title}" (${threadId}) closed, checking for new threads.`, "info");
-      checkForNewThreads();
-    } else {
       checkForNewThreads();
     }
 
