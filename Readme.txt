@@ -18,14 +18,19 @@ Auto-adding threads is based on the last search.
 
 ----
 
+KNOWN ISSUES:
+When out of focus, Muncher tends to forget what it was doing.
+
+-----
+
 Muncher uses 4chan API, not HTML crawling.
 In background.js, you might want to adjust these values:
 
 ✱ const RATE_LIMIT_MS = 1500;
-Delay between downloading images in ms.
-Does not take into account parallel downloads. (room for improvement!)
-Adjust at risk of provoking 4chan.
+    Delay between downloading images in ms.
+    Does not take into account parallel downloads. (room for improvement!)
+    Adjust at risk of provoking 4chan.
 
 ✱ const MAX_CONCURRENT_THREADS = 5;
-Number of max threads running at the same time.
-Adjust at risk of provoking 4chan.
+    Number of max threads running at the same time.
+    Adjust at risk of provoking 4chan.
