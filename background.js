@@ -13,7 +13,7 @@ const MAX_RETRIES = 3;
 const MAX_CONCURRENT_THREADS = 5;
 const DOWNLOAD_TIMEOUT_MS = 9000;
 const MAX_DOWNLOADED_IMAGES = 18000;
-const STUCK_TIMER = 180000;
+const STUCK_TIMER = 5 * 60 * 1000;
 
 function debounce(func, wait) {
   let timeout;
@@ -360,7 +360,7 @@ function monitorThreadProgress() {
                   threadProgressTimers.delete(key);
                   await processThread(thread);
                 } else {
-                  log(`Thread "${thread.title}" (${thread.id}) no new images (${oldTotal} = ${newImageCount}), closing`, "info");
+                  log(`Thread "${thread.title}" (${thread.id}) has no new images (${oldTotal} = ${newImageCount}), closing`, "info");
                   thread.closed = true;
                   thread.active = false;
                   threadProgressTimers.delete(key);
