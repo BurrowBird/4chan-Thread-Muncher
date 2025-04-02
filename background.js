@@ -13,6 +13,7 @@ const MAX_RETRIES = 3;
 const MAX_CONCURRENT_THREADS = 5;
 const DOWNLOAD_TIMEOUT_MS = 9000;
 const MAX_DOWNLOADED_IMAGES = 18000;
+const STUCK_TIMER = 180000;
 
 function debounce(func, wait) {
   let timeout;
@@ -336,7 +337,7 @@ function monitorThreadProgress() {
             threadProgressTimers.set(key, Date.now());
           } else {
             const startTime = threadProgressTimers.get(key);
-            if (Date.now() - startTime >= 180000) {
+            if (Date.now() - startTime >= STUCK_TIMER) {
               thread.active = false;
               log(`Thread "${thread.title}" (${thread.id}) stalled at ${downloaded}/${total}, pausing`, "info");
               chrome.storage.local.set({ watchedThreads });
