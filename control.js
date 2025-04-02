@@ -13,19 +13,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const threadsDiv = document.getElementById("threads");
 
   let refreshInterval = null;
-  // Check localStorage; if no value exists (null), default to true (dark mode)
   let darkMode = localStorage.getItem("darkMode") === null ? true : localStorage.getItem("darkMode") === "true";
 
-  // Apply dark mode immediately based on the initialized value
   if (darkMode) {
     document.body.classList.add("dark-mode");
     modeToggleBtn.textContent = "Light Mode";
   } else {
-    document.body.classList.remove("dark-mode"); // Explicitly ensure light mode is off
+    document.body.classList.remove("dark-mode");
     modeToggleBtn.textContent = "Dark Mode";
   }
 
-  // Save the initial dark mode setting to localStorage
   localStorage.setItem("darkMode", darkMode);
 
   chrome.windows.getCurrent((window) => {
@@ -76,10 +73,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function renderThreads(threads) {
-    // Sort threads by time (newest first)
     const sortedThreads = threads.sort((a, b) => b.time - a.time);
-    
-    // Separate active and inactive threads
     const activeThreads = sortedThreads.filter(t => t.active && !t.closed);
     const inactiveThreads = sortedThreads.filter(t => !t.active || t.closed);
 
@@ -89,27 +83,22 @@ document.addEventListener("DOMContentLoaded", () => {
         .map(div => [parseInt(div.querySelector(".thread-details span:nth-child(2)").textContent.match(/\d+/)[0]), div])
     );
 
-    // Clear current threadsDiv content
     threadsDiv.innerHTML = '';
 
-    // Render active threads
     activeThreads.forEach(thread => {
       renderThread(thread, existingThreads);
     });
 
-    // Add separator if there are both active and inactive threads
     if (activeThreads.length > 0 && inactiveThreads.length > 0) {
       const separator = document.createElement("hr");
       separator.className = "thread-separator";
       threadsDiv.appendChild(separator);
     }
 
-    // Render inactive threads
     inactiveThreads.forEach(thread => {
       renderThread(thread, existingThreads);
     });
 
-    // Remove threads that no longer exist
     existingThreads.forEach((div, id) => {
       if (!sortedThreads.some(t => t.id === id)) div.remove();
     });
@@ -121,7 +110,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const isClosed = thread.closed;
 
     if (existingDiv) {
-      // Update existing thread
       const countSpan = existingDiv.querySelector(".thread-count-active, .thread-count-paused, .thread-count-error, .thread-count-closed");
       countSpan.textContent = `(${thread.downloadedCount || 0} of ${thread.totalImages || 0})`;
       countSpan.className = thread.active ? "thread-count-active" : thread.error ? "thread-count-error" : isClosed ? "thread-count-closed" : "thread-count-paused";
@@ -141,9 +129,8 @@ document.addEventListener("DOMContentLoaded", () => {
       } else if (!isClosed && statusElement) {
         statusElement.remove();
       }
-      threadsDiv.appendChild(existingDiv); // Re-append to maintain order
+      threadsDiv.appendChild(existingDiv);
     } else {
-      // Add new thread
       const div = document.createElement("div");
       div.className = "thread";
       div.innerHTML = `
@@ -229,14 +216,13 @@ document.addEventListener("DOMContentLoaded", () => {
     chrome.runtime.sendMessage({ type: "getStatus" }, (status) => {
       if (status) {
         updateUI(status);
-        status.watchedThreads.forEach(thread => {
-          if (thread.active && !thread.closed && !thread.error) {
-            chrome.runtime.sendMessage({ type: "toggleThread", threadId: thread.id });
-            setTimeout(() => {
-              chrome.runtime.sendMessage({ type: "toggleThread", threadId: thread.id });
-            }, 100);
-          }
-        });
+        if (status.isRunning) {
+          chrome.runtime.sendMessage({ type: "resumeAll" }, (response) => {
+            if (response.success) {
+              appendLog("Window refocused, resumed all active threads", "info");
+            }
+          });
+        }
       }
     });
   });
@@ -260,7 +246,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const downloadPath = downloadPathInput.value.trim() || "4chan_downloads";
     if (board && (searchTerm || threadId)) {
       await chrome.runtime.sendMessage({ type: "start", searchTerm, threadId, board, downloadPath });
-      appendLog(`Started scraping: board=${board}, searchTerm=${searchTerm}, threadId=${threadId}, path=${downloadPath}`, "info");
+      //Disabled Log: appendLog(`Started scraping: board=${board}, searchTerm=${searchTerm}, threadId=${threadId}, path=${downloadPath}`, "info");
       chrome.runtime.sendMessage({ type: "getStatus" }, (status) => {
         if (status) updateUI(status);
       });
@@ -287,7 +273,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-modeToggleBtn.addEventListener("click", () => {
+  modeToggleBtn.addEventListener("click", () => {
     darkMode = !darkMode;
     localStorage.setItem("darkMode", darkMode);
 
