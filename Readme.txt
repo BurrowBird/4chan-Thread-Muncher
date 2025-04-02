@@ -29,13 +29,16 @@ Muncher uses 4chan API, not HTML crawling.
 In background.js, you might want to adjust these values:
 
 ✱ const RATE_LIMIT_MS = 1500;
+    Default value is 1.5 seconds.
     Delay between downloading images in ms.
     Does not take into account parallel downloads. (room for improvement!)
     Adjust at risk of provoking 4chan.
 
 ✱ const MAX_CONCURRENT_THREADS = 5;
+    Default value is 5.
     Number of max threads running at the same time.
     Adjust at risk of provoking 4chan.
 
-✱ const STUCK_TIMER = 180000;
-    Time in ms until a thread is auto-closed when inactive.
+✱ const STUCK_TIMER = 5 * 60 * 1000;
+    Default value is 5 minutes.    
+    Time until a thread is auto-closed when inactive.
