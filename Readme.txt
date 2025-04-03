@@ -21,7 +21,6 @@ Auto-adding threads is based on the last search.
 
 KNOWN ISSUES:
 When out of focus, Muncher tends to forget what it was doing after some time.
-Downloads popping up are annoying.
 
 -----
 
