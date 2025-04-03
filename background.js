@@ -15,7 +15,7 @@ const MAX_RETRIES = 3;
 const MAX_CONCURRENT_THREADS = 5;
 const DOWNLOAD_TIMEOUT_MS = 9000;
 const MAX_DOWNLOADED_IMAGES = 18000;
-const STUCK_TIMER = 5 * 60 * 1000;
+const STUCK_TIMER = 10 * 60 * 1000;
 const MIN_RESUME_INTERVAL = 1000;
 
 function debounce(func, wait) {
