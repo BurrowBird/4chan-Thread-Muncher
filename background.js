@@ -38,9 +38,10 @@ function log(message, type = "info") {
   const isEndOfThread = message.startsWith("Reached the end of thread:");
   const isFoundImages = message.startsWith("Found ") && message.includes(" images in thread:");
   const isNoMatchingThreads = message.startsWith("No new matching threads");
+  const isNoNewImages = message.startsWith("No new images in thread");
 
   // If the current message matches the last one for these specific cases, skip logging
-  if ((isEndOfThread || isFoundImages || isNoMatchingThreads) && lastLogMessage === message) {
+  if ((isEndOfThread || isFoundImages || isNoMatchingThreads || isNoNewImages) && lastLogMessage === message) {
     return; // Skip duplicate log
   }
 
