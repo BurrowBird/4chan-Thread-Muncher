@@ -29,13 +29,18 @@ document.addEventListener("DOMContentLoaded", () => {
     chrome.runtime.sendMessage({ type: "setWindowId", windowId: window.id });
   });
   
-  function appendLog(message, type) {
-    const p = document.createElement("p");
-    p.textContent = `${new Date().toLocaleTimeString()} - ${message}`;
-    p.className = `log-entry ${type}`;
-    logDiv.insertBefore(p, logDiv.firstChild);
-    logDiv.scrollTop = 0;
-  }
+	function appendLog(message, type) {
+	  const p = document.createElement("p");
+	  p.textContent = `${new Date().toLocaleTimeString()} - ${message}`;
+	  p.className = `log-entry ${type}`;
+	  logDiv.insertBefore(p, logDiv.firstChild);
+
+	  // Only scroll to top if the user is already near the top (within 50px)
+	  const isNearTop = logDiv.scrollTop <= 50;
+	  if (isNearTop) {
+		logDiv.scrollTop = 0;
+	  }
+	}
 
   function updateTimer(nextRefresh, activeCount, maxCount) {
     if (refreshInterval) clearInterval(refreshInterval);
