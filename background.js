@@ -383,7 +383,7 @@ function monitorThreadProgress() {
 
       if (isStuck) {
         if (!threadProgressTimers.has(key)) {
-          log(`Starting timeout timer for thread: "${thread.id}"`, "info");
+          //log(`Started timeout timer for thread: "${thread.id}"`, "info");
           threadProgressTimers.set(key, Date.now());
         } else {
 			const elapsed = Date.now() - threadProgressTimers.get(key);
