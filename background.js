@@ -387,7 +387,10 @@ function monitorThreadProgress() {
           threadProgressTimers.set(key, Date.now());
         } else {
 			const elapsed = Date.now() - threadProgressTimers.get(key);
-			log(`No new images in thread: "${thread.id}" for ${Math.round(elapsed / 1000)}s of ${STUCK_TIMER / 1000}s`, "info");
+			const elapsedSeconds = Math.round(elapsed / 1000); // Convert to seconds and round
+			if (elapsedSeconds % 60 === 0 && elapsedSeconds <= 300 && elapsedSeconds >= 60) {
+				log(`No new images in thread: "${thread.id}" for ${elapsedSeconds}s of ${STUCK_TIMER / 1000}s`, "info");
+			}
           if (elapsed >= STUCK_TIMER) {
             //thread.active = false;
             log(`Thread "${thread.title}" (${thread.id}) stalled at ${downloaded}/${total}, closing`, "info");
