@@ -383,11 +383,11 @@ function monitorThreadProgress() {
 
       if (isStuck) {
         if (!threadProgressTimers.has(key)) {
-          log(`Starting stuck timer for thread ${thread.id}`, "info");
+          log(`Starting timeout timer for thread ${thread.id}`, "info");
           threadProgressTimers.set(key, Date.now());
         } else {
 			const elapsed = Date.now() - threadProgressTimers.get(key);
-			log(`Thread ${thread.id} stuck for ${Math.round(elapsed / 1000)}s of ${STUCK_TIMER / 1000}s`, "info");
+			log(`Thread ${thread.id} No new images for ${Math.round(elapsed / 1000)}s of ${STUCK_TIMER / 1000}s`, "info");
           if (elapsed >= STUCK_TIMER) {
             //thread.active = false;
             log(`Thread "${thread.title}" (${thread.id}) stalled at ${downloaded}/${total}, closing`, "info");
