@@ -305,7 +305,7 @@ function keepThreadsAlive() {
     return;
   }
   const activeThreads = watchedThreads.filter(t => t.active && !t.closed && !t.error);
-  log(`keepThreadsAlive: Processing ${activeThreads.length} active threads`, "info");
+  //log(`keepThreadsAlive: Processing ${activeThreads.length} active threads`, "info");
   for (const thread of activeThreads) {
     if (!activeDownloads.has(`${thread.id}-processing`)) {
       activeDownloads.set(`${thread.id}-processing`, true);
@@ -333,7 +333,7 @@ function setupAlarms() {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "keepThreadsAlive") {
-    log("Alarm triggered: keepThreadsAlive", "info");
+    //log("Alarm triggered: keepThreadsAlive", "info");
     keepThreadsAlive();
   } else if (alarm.name === "monitorThreadProgress") {
     //log("Alarm triggered: monitorThreadProgress", "info");
