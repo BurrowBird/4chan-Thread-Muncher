@@ -219,7 +219,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (status.isRunning) {
           chrome.runtime.sendMessage({ type: "resumeAll" }, (response) => {
             if (response.success) {
-              appendLog("Window refocused, resumed all active threads", "info");
+              appendLog("Window refocused, resumed and synced all active threads", "info");
+              // Force a recount and sync
+              chrome.runtime.sendMessage({ type: "syncThreadCounts" });
             }
           });
         }
@@ -246,7 +248,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const downloadPath = downloadPathInput.value.trim() || "4chan_downloads";
     if (board && (searchTerm || threadId)) {
       await chrome.runtime.sendMessage({ type: "start", searchTerm, threadId, board, downloadPath });
-      //Disabled Log: appendLog(`Started scraping: board=${board}, searchTerm=${searchTerm}, threadId=${threadId}, path=${downloadPath}`, "info");
       chrome.runtime.sendMessage({ type: "getStatus" }, (status) => {
         if (status) updateUI(status);
       });
@@ -288,11 +289,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message.type === "log") {
-      appendLog(message.message, message.logType);
-    } else if (message.type === "updateStatus") {
-      updateUI(message);
-    }
-  });
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "log") {
+    appendLog(message.message, message.logType);
+    sendResponse({ success: true });
+  } else if (message.type === "updateStatus") {
+    updateUI(message);
+    sendResponse({ success: true });
+  }
+  return true; // Indicates that sendResponse will be called asynchronously
+});
 });
