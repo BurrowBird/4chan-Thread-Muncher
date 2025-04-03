@@ -210,7 +210,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (status.isRunning) {
           chrome.runtime.sendMessage({ type: "resumeAll" }, (response) => {
             if (response.success) {
-              appendLog("Window refocused, resumed and synced all active threads", "info");
+              //appendLog("Window refocused, resumed and synced all active threads", "info");
               // Force a recount and sync
               chrome.runtime.sendMessage({ type: "syncThreadCounts" });
             }
@@ -257,7 +257,7 @@ document.addEventListener("DOMContentLoaded", () => {
   resumeAllBtn.addEventListener("click", async () => {
     await chrome.runtime.sendMessage({ type: "resumeAll" }, (response) => {
       if (response.success) {
-        appendLog("Resumed all paused threads.", "info");
+        //appendLog("Resumed all paused threads.", "info");
       }
     });
     chrome.runtime.sendMessage({ type: "getStatus" }, (status) => {

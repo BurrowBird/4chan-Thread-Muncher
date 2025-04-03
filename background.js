@@ -692,13 +692,13 @@ async function resumeAllThreads() {
     chrome.storage.local.set({ isRunning });
   }
 
-  log(`Attempting to resume ${pausedThreads.length} paused threads`, "info");
+  //log(`Attempting to resume ${pausedThreads.length} paused threads`, "info");
 
   // Function to process a single thread
   const processSingleThread = async (thread) => {
     thread.active = true;
     resumedCount++;
-    log(`Resuming thread "${thread.title}" (${thread.id})`, "info");
+    //log(`Resuming thread "${thread.title}" (${thread.id})`, "info");
     try {
       await processThread(thread);
     } catch (error) {
@@ -735,7 +735,7 @@ async function resumeAllThreads() {
     await checkAndResume();
   }
 
-  log(`Resumed ${resumedCount} threads`, "info");
+  //log(`Resumed ${resumedCount} threads`, "info");
   chrome.storage.local.set({ watchedThreads });
   debouncedUpdateUI();
 
