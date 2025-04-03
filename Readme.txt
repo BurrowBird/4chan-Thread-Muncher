@@ -39,5 +39,5 @@ In background.js, you might want to adjust these values:
     Adjust at risk of provoking 4chan.
 
 ✱ const STUCK_TIMER = 5 * 60 * 1000;
-    Default value is 10 minutes.    
+    Default value is 5 minutes.    
     Time until a thread is auto-closed when inactive.
