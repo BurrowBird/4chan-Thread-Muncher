@@ -39,6 +39,6 @@ In background.js, you might want to adjust these values:
     Number of max threads running at the same time.
     Adjust at risk of provoking 4chan.
 
-✱ const STUCK_TIMER = 5 * 60 * 1000;
-    Default value is 5 minutes.    
+✱ const STUCK_TIMER = 10 * 60 * 1000;
+    Default value is 10 minutes.    
     Time until a thread is auto-closed when inactive.
