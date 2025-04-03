@@ -121,14 +121,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const closeBtn = existingDiv.querySelector(".closeBtn");
       closeBtn.disabled = isClosed;
       const statusElement = existingDiv.querySelector(".thread-status");
-      if (isClosed && !statusElement) {
-        const newStatus = document.createElement("span");
-        newStatus.className = "thread-status";
-        newStatus.textContent = "Closed";
-        existingDiv.querySelector(".thread-details").appendChild(newStatus);
-      } else if (!isClosed && statusElement) {
-        statusElement.remove();
-      }
       threadsDiv.appendChild(existingDiv);
     } else {
       const div = document.createElement("div");
@@ -138,7 +130,6 @@ document.addEventListener("DOMContentLoaded", () => {
           <span class="${thread.active ? 'thread-count-active' : thread.error ? 'thread-count-error' : isClosed ? 'thread-count-closed' : 'thread-count-paused'}">(${thread.downloadedCount || 0} of ${thread.totalImages || 0})</span>
           <span class="${isClosed ? 'thread-closed' : thread.error ? 'error' : thread.active ? 'info' : 'warning'}">${thread.title} (${thread.id})</span>
           <span class="thread-creation">${formatDate(thread.time)}</span>
-          ${isClosed ? '<span class="thread-status">Closed</span>' : ''}
         </div>
         <div class="thread-buttons">
           <button class="toggleBtn">${thread.active ? "Pause" : thread.error ? "Retry" : "Resume"}</button>
