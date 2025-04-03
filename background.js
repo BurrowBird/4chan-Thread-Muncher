@@ -9,6 +9,7 @@ let lastSearchParams = { board: '', searchTerm: '', downloadPath: '4chan_downloa
 let threadProgressTimers = new Map();
 let isResuming = false;
 let lastResumeTime = 0;
+let lastLogMessage = null;
 
 const RATE_LIMIT_MS = 1500;
 const MAX_RETRIES = 3;
@@ -32,7 +33,23 @@ function debounce(func, wait) {
 
 function log(message, type = "info") {
   const timestamp = new Date().toLocaleTimeString();
+
+  // Check if the message matches one of the specific patterns we want to deduplicate
+  const isEndOfThread = message.startsWith("Reached the end of thread:");
+  const isFoundImages = message.startsWith("Found ") && message.includes(" images in thread:");
+
+  // If the current message matches the last one for these specific cases, skip logging
+  if ((isEndOfThread || isFoundImages) && lastLogMessage === message) {
+    return; // Skip duplicate log
+  }
+
+  // Log to console
   console.log(`[${timestamp}] [${type.toUpperCase()}] ${message}`);
+
+  // Update the last log message
+  lastLogMessage = message;
+
+  // Send to UI if windowId exists
   if (windowId) {
     chrome.windows.get(windowId, {}, (win) => {
       if (chrome.runtime.lastError) {
@@ -368,14 +385,14 @@ function monitorThreadProgress() {
 
             setTimeout(async () => {
               thread.active = true;
-              log(`Thread "${thread.title}" (${thread.id}) resuming to check for new images`, "info");
+              //log(`Thread "${thread.title}" (${thread.id}) resuming to check for new images`, "info");
               const oldTotal = thread.totalImages || 0;
 
               try {
                 const data = await fetchWithRetry(thread.url);
                 const newImageCount = data.posts.filter(post => post.tim && post.ext).length;
                 thread.totalImages = newImageCount;
-                log(`Thread "${thread.title}" (${thread.id}) refreshed, now ${thread.downloadedCount}/${thread.totalImages}`, "info");
+                //log(`Thread "${thread.title}" (${thread.id}) refreshed, now ${thread.downloadedCount}/${thread.totalImages}`, "info");
 
                 if (newImageCount > oldTotal) {
                   log(`Thread "${thread.title}" (${thread.id}) has new images (${oldTotal} -> ${newImageCount}), keeping active`, "info");
