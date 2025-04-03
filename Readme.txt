@@ -20,7 +20,8 @@ Auto-adding threads is based on the last search.
 ----
 
 KNOWN ISSUES:
-When out of focus, Muncher tends to forget what it was doing after some time.
+When out of focus for a time, Muncher tends to forget what it was doing.
+Sometimes the extension needs to be reloaded a few times to load correctly.
 
 -----
 
