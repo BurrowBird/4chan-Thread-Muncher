@@ -343,7 +343,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 function monitorThreadProgress() {
   if (!isRunning) {
-    log("monitorThreadProgress: Not running.", "info");
+    //log("monitorThreadProgress: Not running.", "info");
     checkForNewThreads();
     return;
   }
@@ -497,7 +497,7 @@ async function directoryExists(threadId) {
 
 async function searchAndWatchThreads(board, searchTerm) {
   if (!isRunning) {
-    log(`searchAndWatchThreads skipped: isRunning is false`, "info");
+    //log(`searchAndWatchThreads skipped: isRunning is false`, "info");
     return;
   }
   const catalogUrl = `https://a.4cdn.org/${board}/catalog.json`;
