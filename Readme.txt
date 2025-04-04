@@ -39,7 +39,7 @@ In background.js, you might want to adjust these values:
 
 ✱ const STUCK_TIMER = 5 * 60 * 1000;
     Default value is 5 minutes.    
-    Time until a thread is auto-closed when inactive. (actually may be longer by up to MANAGE_THREADS_INTERVAL)
+    Time until a thread is auto-closed when inactive. (actually may take longer by up to MANAGE_THREADS_INTERVAL)
 
 ✱ const MANAGE_THREADS_INTERVAL = 1;
     Default value is 1 minute.
