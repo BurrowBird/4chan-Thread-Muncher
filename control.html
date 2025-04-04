@@ -11,66 +11,103 @@
       --button-bg: #f0f0f0;
       --button-hover: #e0e0e0;
       --log-bg: #ffffff;
+      --error-color: #f28b82; /* Red */
+      --warning-color: #fdd663; /* Yellow */
+      --success-color: #81c995; /* Green */
+      --info-color: #8ab4f8; /* Blue */
+      --closed-color: #808080; /* Grey */
+      --accent-color: #a78bfa; /* Purple */
     }
 
     body.dark-mode {
-      --bg-color: #1e1e2e;
-      --text-color: #cdd6f4;
-      --border-color: #313244;
-      --input-bg: #181825;
-      --button-bg: #313244;
-      --button-hover: #45475a;
-      --log-bg: #181825;
+      --bg-color: #1e1e2e; /* Catppuccin Macchiato Base */
+      --text-color: #cad3f5; /* Catppuccin Macchiato Text */
+      --border-color: #363a4f; /* Catppuccin Macchiato Surface1 */
+      --input-bg: #24273a; /* Catppuccin Macchiato Surface0 */
+      --button-bg: #494d64; /* Catppuccin Macchiato Surface2 */
+      --button-hover: #5b6078; /* Catppuccin Macchiato Overlay0 */
+      --log-bg: #181926; /* Catppuccin Macchiato Mantle */
+      --error-color: #ed8796; /* Catppuccin Macchiato Red */
+      --warning-color: #eed49f; /* Catppuccin Macchiato Yellow */
+      --success-color: #a6da95; /* Catppuccin Macchiato Green */
+      --info-color: #8aadf4; /* Catppuccin Macchiato Blue */
+      --closed-color: #6e738d; /* Catppuccin Macchiato Overlay1 */
+      --accent-color: #c6a0f6; /* Catppuccin Macchiato Mauve */
     }
 
-    body { 
-      padding: 10px; 
-      font-family: Arial; 
+    body {
+      padding: 15px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 14px;
       transition: background-color 0.3s ease, color 0.3s ease;
       background-color: var(--bg-color);
       color: var(--text-color);
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
     }
 
     #header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 10px;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border-color);
     }
 
     #title {
-      font-size: 18px;
+      font-size: 20px;
       font-weight: bold;
     }
 
-    #log { 
-      height: 200px; 
-      overflow-y: scroll; 
-      border: 1px solid var(--border-color); 
-      padding: 5px; 
-      font-size: 12px; 
-      background-color: var(--log-bg);
-      border-radius: 4px;
+    #log-container {
+        flex-shrink: 1; /* Allow shrinking */
+        height: 200px; /* Initial height */
+        min-height: 100px; /* Minimum height */
+        overflow: hidden; /* Hide overflow */
+        display: flex; /* Use flexbox */
+        flex-direction: column; /* Stack elements vertically */
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        margin-top: 15px; /* Add margin above log */
     }
 
-    .log-entry { margin: 2px 0; }
-    .info { color: #8ab4f8; }
-    .success { color: #81c995; }
-    .warning { color: #fdd663; }
-    .error { color: #f28b82; }
 
-    button { 
-      margin: 5px; 
-      padding: 5px 10px; 
+    #log {
+      flex-grow: 1; /* Allow log div to grow */
+      overflow-y: scroll;
+      padding: 8px;
+      font-size: 12px;
+      background-color: var(--log-bg);
+      border-radius: 4px; /* Apply radius to inner div */
+      scroll-behavior: smooth;
+    }
+
+    .log-entry { margin: 3px 0; line-height: 1.4; }
+    .info { color: var(--info-color); }
+    .success { color: var(--success-color); }
+    .warning { color: var(--warning-color); }
+    .error { color: var(--error-color); }
+    .debug { color: var(--accent-color); opacity: 0.7; } /* Optional debug style */
+
+
+    button {
+      margin: 0 5px; /* Removed top/bottom margin, use flex gap */
+      padding: 6px 12px;
       background-color: var(--button-bg);
       color: var(--text-color);
       border: 1px solid var(--border-color);
       border-radius: 4px;
       cursor: pointer;
-      transition: background-color 0.2s;
+      transition: background-color 0.2s, opacity 0.2s;
+      font-size: 13px;
+      white-space: nowrap; /* Prevent button text wrapping */
     }
 
-    button:hover {
+    button:hover:not(:disabled) {
       background-color: var(--button-hover);
     }
 
@@ -79,116 +116,148 @@
       cursor: not-allowed;
     }
 
-    input { 
-      margin: 5px; 
-      padding: 8px; 
-      width: calc(100% - 20px); 
+    input[type="text"] {
+      margin: 5px 0; /* Top/bottom margin only */
+      padding: 8px;
+      flex-grow: 1; /* Allow inputs to grow */
       background-color: var(--input-bg);
       color: var(--text-color);
       border: 1px solid var(--border-color);
       border-radius: 4px;
+      font-size: 14px;
+      min-width: 100px; /* Prevent inputs from becoming too small */
     }
 
-    #timer { 
-      margin: 5px; 
-      font-size: 14px; 
-      color: var(--text-color); 
-      opacity: 0.8;
+    .input-group {
+        display: flex;
+        gap: 10px; /* Space between inputs */
+        margin-bottom: 10px;
+        flex-wrap: wrap; /* Allow wrapping on smaller screens */
+    }
+     .input-group > * {
+        margin: 0; /* Remove default margins from inputs/placeholders inside */
+    }
+
+
+    #thread-count-container { /* Renamed from timer */
+      font-size: 14px;
+      color: var(--text-color);
+      opacity: 0.9;
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      gap: 15px; /* Space between counts and timer */
+      margin-left: 10px; /* Space from buttons */
+    }
+    #countdown-timer {
+        font-size: 12px;
+        opacity: 0.8;
     }
 
-	#thread-count {
-	  display: block;
-	  text-align: center;
-	  font-size: 12px;
-	  color: var(--text-color);
-	  margin: 10px 0;
-	  display: flex; 
-		flex-direction: row; 
-	}
-
-    #threads { 
-      margin: 5px; 
+    #threads-container { /* Added container for threads */
+        flex-grow: 1; /* Take remaining vertical space */
+        overflow-y: auto; /* Allow scrolling only for threads */
+        margin-top: 10px;
+        border-top: 1px solid var(--border-color);
+        padding-top: 10px;
     }
 
-    .thread { 
-      display: flex; 
-      align-items: flex-start; 
-      margin: 10px 0; 
-      padding: 8px;
+
+    #threads {
+      /* Removed margin, handled by container */
+      /* Removed overflow, handled by container */
+    }
+
+    .thread {
+      display: flex;
+      align-items: center; /* Vertically align items */
+      margin: 8px 0;
+      padding: 10px;
       border: 1px solid var(--border-color);
       border-radius: 4px;
       background-color: var(--input-bg);
+      gap: 10px; /* Space between details and buttons */
+      flex-wrap: wrap; /* Allow wrapping */
     }
 
-    .thread-details { 
-      flex: 1; 
+    .thread-details {
+      flex: 1; /* Take available space */
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 250px; /* Ensure details don't get too squished */
+      flex-wrap: wrap; /* Allow details to wrap */
     }
 
-    .thread-buttons { 
-      display: flex; 
-      flex-direction: row; 
+    .thread-buttons {
+      display: flex;
+      flex-direction: row;
+      gap: 5px; /* Space between buttons */
     }
 
-    .thread-buttons button { 
-      margin: 0 5px; 
-      padding: 3px 6px; 
-      width: 80px; 
+    .thread-buttons button {
+      margin: 0; /* Remove default margins */
+      padding: 4px 8px;
+      width: auto; /* Let button size adjust to content */
+      min-width: 65px; /* Minimum width */
+      text-align: center;
     }
 
-    .thread-count-active { color: #81c995; margin-right: 5px; font-weight: bold; }
-    .thread-count-paused { color: #fdd663; margin-right: 5px; font-weight: bold; }
-    .thread-count-error { color: #f28b82; margin-right: 5px; font-weight: bold; }
-    .thread-count-closed { color: #808080; margin-right: 5px; font-weight: bold; }
-    
-    .thread-closed { color: #808080; }
-    .thread-status { margin-left: 5px; font-style: italic; }
-    .thread-creation { margin-left: 10px; font-size: 12px; opacity: 0.7; }
+    /* Status Count Styles */
+    .thread-count { font-weight: bold; min-width: 70px; text-align: right; }
+    .thread-count-active { color: var(--success-color); }
+    .thread-count-paused { color: var(--warning-color); }
+    .thread-count-error { color: var(--error-color); }
+    .thread-count-closed { color: var(--closed-color); }
+
+    /* Thread Title Styles */
+    .thread-title { font-weight: normal; flex-shrink: 1; min-width: 100px; } /* Allow title to shrink */
+    .thread-title-active { color: var(--info-color); }
+    .thread-title-paused { color: var(--warning-color); }
+    .thread-title-error { color: var(--error-color); }
+    .thread-title-closed { color: var(--closed-color); text-decoration: line-through; }
+
+    .thread-creation { font-size: 11px; opacity: 0.7; white-space: nowrap; }
 
     .action-buttons {
       display: flex;
       justify-content: space-between;
-      margin: 10px 0;
+      align-items: center; /* Align items vertically */
+      margin: 15px 0;
+      flex-wrap: wrap; /* Allow wrapping */
+      gap: 10px; /* Space between button groups */
     }
 
     .action-buttons-left, .action-buttons-right {
       display: flex;
+      align-items: center;
+      gap: 10px; /* Space between items in the groups */
+       flex-wrap: wrap; /* Allow inner wrapping */
     }
 
     #modeToggle {
-      background-color: var(--button-bg);
-      color: var(--text-color);
-      border: 1px solid var(--border-color);
-      padding: 5px 10px;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background-color 0.2s;
+        padding: 5px 10px; /* Smaller padding */
+        margin: 0; /* Remove margin for alignment */
     }
 
-    #modeToggle:hover {
-      background-color: var(--button-hover);
-    }
 
-    hr {
+    hr.thread-separator {
       border: none;
-      border-top: 1px solid var(--border-color);
+      border-top: 1px dashed var(--border-color);
       margin: 15px 0;
+      opacity: 0.5;
     }
-	
-    .thread-archived {
-      color: #a78bfa; /* Purple for archived threads */
+
+    /* Danger button style */
+    .danger-button {
+        background-color: var(--error-color);
+        color: var(--bg-color); /* Contrasting text */
+        border-color: var(--error-color);
     }
-    .thread-deleted {
-      color: #f87171; /* Red for deleted threads */
-    }
-    .thread-status-archived {
-      color: #a78bfa;
-    }
-    .thread-status-deleted {
-      color: #f87171;
-    }
+     .danger-button:hover:not(:disabled) {
+        background-color: color-mix(in srgb, var(--error-color) 80%, black); /* Darken on hover */
+     }
+
+
   </style>
 </head>
 <body>
@@ -196,20 +265,42 @@
     <div id="title">4chan Thread Muncher 9000</div>
     <button id="modeToggle">Dark Mode</button>
   </div>
-  <input type="text" id="downloadPath" placeholder="Enter download path (e.g., 4chan_downloads)">
-  <input type="text" id="searchTerm" placeholder="Enter search term (regex supported)">
-  <input type="text" id="threadId" placeholder="Enter thread ID (e.g., 933070267)">
-	<input type="text" id="board" placeholder="Enter board (e.g., b)">
-	<div class="action-buttons">
-	  <div class="action-buttons-left">
-		<button id="startBtn">Add Threads</button>
-		<button id="pauseAllBtn">Pause All</button>
-		<button id="resumeAllBtn">Resume All</button>
-		<span id="thread-count">0 of 5 Active Threads</span>
-	  </div>
-	</div>
-  <div id="threads"></div>
-  <div id="log"></div>
+
+  <div class="input-group">
+      <input type="text" id="downloadPath" placeholder="Download Path (e.g., 4chan_dl)">
+      <input type="text" id="board" placeholder="Board (e.g., wg)">
+      <input type="text" id="searchTerm" placeholder="Search Term (regex)">
+      <input type="text" id="threadId" placeholder="Thread ID (optional)">
+  </div>
+
+  <div class="action-buttons">
+    <div class="action-buttons-left">
+      <button id="startBtn">Add/Search Threads</button>
+      <button id="pauseAllBtn">Pause All</button>
+      <button id="resumeAllBtn">Resume All</button>
+      <div id="thread-count-container"> <!-- Contains counts and timer -->
+          <span id="thread-count">0 / 0 Active Threads</span> <!-- Simplified initial text -->
+          <span id="countdown-timer">Next: ---</span>
+      </div>
+    </div>
+    <div class="action-buttons-right">
+        <button id="syncCountsBtn">Sync Counts</button> <!-- Added Sync Button -->
+        <button id="forgetAllBtn" class="danger-button">Forget All History</button> <!-- Added Forget All -->
+    </div>
+  </div>
+
+  <div id="threads-container"> <!-- Scrollable container for threads -->
+      <div id="threads">
+          <!-- Thread elements will be injected here -->
+      </div>
+  </div>
+
+  <div id="log-container"> <!-- Container for the log -->
+      <div id="log">
+          <!-- Log messages will be injected here -->
+      </div>
+  </div>
+
   <script src="control.js"></script>
 </body>
 </html>
