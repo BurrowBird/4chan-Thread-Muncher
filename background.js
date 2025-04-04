@@ -55,7 +55,7 @@ function log(message, type = "info") {
         return; // Don't reset windowId here, it might reappear
       }
       if (win) {
-        chrome.runtime.sendMessage({ type: "log", message: `[${timestamp}] ${message}`, logType: type }, () => {
+        chrome.runtime.sendMessage({ type: "log", message: message, logType: type }, () => {
           if (chrome.runtime.lastError) {
             // console.warn(`[${timestamp}] Log message send failed: ${chrome.runtime.lastError.message}`);
           }

@@ -70,18 +70,9 @@ function appendLog(message, type = "info") {
 
     const p = document.createElement("p");
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    let messageContent = message; // Start with the original message
 
-    // Check if the message likely came from the background script's format
-    // A simple check for the pattern "[...] [...] " at the start
-    const prefixMatch = message.match(/^\[.*?\]\s*\[.*?\]\s+/);
-    if (prefixMatch) {
-      // If it matches the background format, extract the actual message part
-      messageContent = message.substring(prefixMatch[0].length);
-    }
-    // Otherwise, messageContent remains the original message passed in (e.g., "Sending start request...")
-
-    p.textContent = `${timestamp} - ${messageContent}`; // Use the processed or original messageContent
+// Use the raw 'message' received directly
+    p.textContent = `${timestamp} - ${message}`;
     p.className = `log-entry ${type}`;
 
     logDiv.insertBefore(p, logDiv.firstChild);
