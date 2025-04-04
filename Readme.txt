@@ -20,7 +20,7 @@ Auto-adding threads is based on the last search.
 ----
 
 KNOWN ISSUES:
-
+Downloads resume before the control window is open.
 
 -----
 
