@@ -94,210 +94,161 @@ function getFullPath(threadId, username, filename) {
 }
 
 async function downloadImage(url, threadId, username) {
-  const filename = url.split('/').pop();
-  const thread = watchedThreads.find(t => t.id === threadId);
-  if (!thread) {
-    log(`Thread ${threadId} not found for ${url}`, "error");
-    return { success: false, downloaded: false };
-  }
-
-  // Ensure thread properties are initialized (should be done on load/add, but belt-and-suspenders)
-  thread.skippedImages = thread.skippedImages || new Set();
-  thread.downloadedCount = thread.downloadedCount || 0;
-  thread.totalImages = thread.totalImages || 0; // Ensure totalImages is at least 0
-
-  const fullPath = getFullPath(threadId, username, filename);
-  const downloadKey = `${threadId}-${filename}`; // Used for locks and active downloads map
-
-  // Lock handling
-  if (downloadLocks.has(downloadKey)) {
-    await downloadLocks.get(downloadKey); // Wait for existing lock on this specific file
-  }
-  let resolveLock;
-  const lockPromise = new Promise(resolve => { resolveLock = resolve; });
-  downloadLocks.set(downloadKey, lockPromise);
-
-  try {
-    const isAlreadyDownloaded = downloadedImages.has(fullPath);
-    const isAlreadySkipped = thread.skippedImages.has(filename);
-
-    // If already known (either in master list or thread's skipped set)
-    if (isAlreadyDownloaded || isAlreadySkipped) {
-      if (!isAlreadySkipped) { // If found in master list but not yet in thread's set
-        thread.skippedImages.add(filename);
-        // Update count based on set size and cap
-        thread.downloadedCount = Math.min(thread.skippedImages.size, thread.totalImages);
-        updateWatchedThreads(); // Save the updated thread state
-      }
-      // log(`Skipped already known image: ${filename} in thread ${threadId}`, "debug"); // Optional debug log
-      return { success: true, downloaded: false }; // Indicate success but no new download occurred
+    const filename = url.split('/').pop();
+    const thread = watchedThreads.find(t => t.id === threadId);
+    if (!thread) {
+        log(`Thread ${threadId} not found for ${url}`, "error");
+        return { success: false, downloaded: false };
     }
 
-    // Check if the thread is active before attempting download
-    if (!thread.active) {
-      // log(`Download skipped for ${url}: Thread ${threadId} is inactive`, "info"); // Can be noisy
-      return { success: false, downloaded: false };
+    // Ensure thread properties are initialized
+    thread.skippedImages = thread.skippedImages || new Set();
+    thread.downloadedCount = thread.downloadedCount || 0;
+    thread.totalImages = thread.totalImages || 0;
+
+    const fullPath = getFullPath(threadId, username, filename);
+    const downloadKey = `${threadId}-${filename}`; // Used for locks and active downloads map
+
+    // Lock handling
+    if (downloadLocks.has(downloadKey)) {
+        await downloadLocks.get(downloadKey); // Wait for existing lock on this specific file
     }
+    let resolveLock;
+    const lockPromise = new Promise(resolve => { resolveLock = resolve; });
+    downloadLocks.set(downloadKey, lockPromise);
 
-    // --- Download attempt loop ---
-    for (let i = 0; i < MAX_RETRIES; i++) {
-      if (!isRunning || !thread.active) throw new Error("Process or thread stopped during download attempt");
-      let downloadId = null; // Track downloadId for this attempt
+    try {
+        const isAlreadyDownloaded = downloadedImages.has(fullPath);
+        const isAlreadySkipped = thread.skippedImages.has(filename);
 
-      try {
-        //log(`Attempting download (${i + 1}/${MAX_RETRIES}): ${filename} for thread ${threadId}`, "info");
-        downloadId = await new Promise((resolve, reject) => {
-          chrome.downloads.download({
-            url,
-            filename: fullPath,
-            conflictAction: 'uniquify' // Let Chrome handle simple name conflicts (e.g., file (1).ext)
-          }, (id) => {
-            // Check for errors or undefined ID
-            if (chrome.runtime.lastError || id === undefined) {
-              reject(new Error(`Download initiation failed: ${chrome.runtime.lastError?.message || 'Unknown error or invalid ID'}`));
-            } else {
-              resolve(id); // Successfully initiated
+        // If already known
+        if (isAlreadyDownloaded || isAlreadySkipped) {
+            if (!isAlreadySkipped) {
+                thread.skippedImages.add(filename);
+                thread.downloadedCount = Math.min(thread.skippedImages.size, thread.totalImages);
+                updateWatchedThreads();
             }
-          });
-        });
+            return { success: true, downloaded: false };
+        }
 
-        // Check if thread became inactive *immediately* after initiating download, before listener setup
+        // Check if the thread is active *before* attempting download
+        // Note: This check is less critical now that the listener won't cancel, but still good practice.
         if (!thread.active) {
-             log(`Thread ${threadId} became inactive immediately after download start for ${filename}`, "warning");
-             if (downloadId) { chrome.downloads.cancel(downloadId); chrome.downloads.erase({id: downloadId}); }
-             throw new Error("Thread became inactive after download start");
+            // log(`Download skipped for ${url}: Thread ${threadId} is inactive (pre-check)`, "info");
+            return { success: false, downloaded: false };
         }
 
-        activeDownloads.set(downloadKey, downloadId); // Track the active download by its ID
-
-        // --- Wait for download completion or interruption ---
-        const downloadResult = await new Promise((resolve, reject) => {
-          let listener = null; // To store the listener function for removal
-          const timeoutId = setTimeout(() => {
-              log(`Download timed out for ${filename} (ID: ${downloadId}) after ${DOWNLOAD_TIMEOUT_MS}ms`, "warning");
-              if (listener) chrome.downloads.onChanged.removeListener(listener); // Remove listener on timeout
-              activeDownloads.delete(downloadKey); // Untrack active download
-              // Try to cancel and erase the timed-out download
-              if(downloadId) {
-                  chrome.downloads.cancel(downloadId, () => {
-                      chrome.downloads.erase({ id: downloadId });
-                  });
-              }
-              reject(new Error("Download timed out"));
-          }, DOWNLOAD_TIMEOUT_MS);
-
-          listener = (delta) => {
-            // Only react to changes for *this* specific download ID
-            if (delta.id === downloadId) {
-              // Check if thread is still active. If not, cancel download.
-               if (!watchedThreads.find(t => t.id === threadId)?.active) {
-                   log(`Cancelling download ${downloadId} (${filename}) as thread ${threadId} became inactive`, "warning");
-                   clearTimeout(timeoutId);
-                   chrome.downloads.onChanged.removeListener(listener);
-                   activeDownloads.delete(downloadKey);
-                   chrome.downloads.cancel(downloadId, () => {
-                       chrome.downloads.erase({ id: downloadId });
-                   });
-                   reject(new Error("Thread became inactive during download"));
-                   return;
-               }
-
-              // Handle completion
-              if (delta.state && delta.state.current === "complete") {
-                clearTimeout(timeoutId); // Clear the timeout
-                chrome.downloads.onChanged.removeListener(listener); // Remove this listener
-                activeDownloads.delete(downloadKey); // Untrack active download
-                resolve(true); // Success!
-              }
-              // Handle interruption
-              else if (delta.state && delta.state.current === "interrupted") {
-                clearTimeout(timeoutId); // Clear the timeout
-                chrome.downloads.onChanged.removeListener(listener); // Remove this listener
-                activeDownloads.delete(downloadKey); // Untrack active download
-                log(`Download interrupted for ${filename} (ID: ${downloadId}). Reason: ${delta.error?.current || 'Unknown'}`, "warning");
-                // Erase the interrupted download file/history
-                chrome.downloads.erase({ id: downloadId });
-                reject(new Error(`Download interrupted: ${delta.error?.current || 'Unknown reason'}`));
-              }
-              // Note: 'in_progress' state is ignored, we just wait
+        // --- Download attempt loop ---
+        for (let i = 0; i < MAX_RETRIES; i++) {
+             // Check global running state and thread active state *before each attempt*
+            if (!isRunning || !watchedThreads.find(t => t.id === threadId)?.active) {
+                 throw new Error("Process or thread stopped before download attempt");
             }
-          };
-          chrome.downloads.onChanged.addListener(listener);
-        });
+            let downloadId = null;
 
-        // --- Post-successful download logic ---
-        if(downloadResult === true) {
-            // Add to master downloaded list
-            downloadedImages.set(fullPath, {
-                timestamp: Date.now(),
-                threadId
-            });
-            // Add filename to the thread's skipped set (ensures it's marked processed)
-            if (!thread.skippedImages.has(filename)) {
-                 thread.skippedImages.add(filename);
+            try {
+                // log(`Attempting download (${i + 1}/${MAX_RETRIES}): ${filename} for thread ${threadId}`, "info"); // Can be noisy
+                downloadId = await new Promise((resolve, reject) => {
+                    chrome.downloads.download({
+                        url,
+                        filename: fullPath,
+                        conflictAction: 'uniquify'
+                    }, (id) => {
+                        if (chrome.runtime.lastError || id === undefined) {
+                            reject(new Error(`Download initiation failed: ${chrome.runtime.lastError?.message || 'Unknown error or invalid ID'}`));
+                        } else {
+                            resolve(id);
+                        }
+                    });
+                });
+
+                activeDownloads.set(downloadKey, downloadId);
+
+                // --- Wait for download completion or interruption ---
+                const downloadResult = await new Promise((resolve, reject) => {
+                    let listener = null;
+                    const timeoutId = setTimeout(() => {
+                        log(`Download timed out for ${filename} (ID: ${downloadId}) after ${DOWNLOAD_TIMEOUT_MS}ms`, "warning");
+                        if (listener) chrome.downloads.onChanged.removeListener(listener);
+                        activeDownloads.delete(downloadKey);
+                        if (downloadId) {
+                            chrome.downloads.cancel(downloadId, () => { chrome.downloads.erase({ id: downloadId }); });
+                        }
+                        reject(new Error("Download timed out"));
+                    }, DOWNLOAD_TIMEOUT_MS);
+
+                    listener = (delta) => {
+                        if (delta.id === downloadId) {
+
+                            // Handle completion
+                            if (delta.state && delta.state.current === "complete") {
+                                clearTimeout(timeoutId);
+                                chrome.downloads.onChanged.removeListener(listener);
+                                activeDownloads.delete(downloadKey);
+                                resolve(true); // Success!
+                            }
+                            // Handle interruption
+                            else if (delta.state && delta.state.current === "interrupted") {
+                                clearTimeout(timeoutId);
+                                chrome.downloads.onChanged.removeListener(listener);
+                                activeDownloads.delete(downloadKey);
+                                log(`Download interrupted for ${filename} (ID: ${downloadId}). Reason: ${delta.error?.current || 'Unknown'}`, "warning");
+                                chrome.downloads.erase({ id: downloadId });
+                                reject(new Error(`Download interrupted: ${delta.error?.current || 'Unknown reason'}`));
+                            }
+                        }
+                    };
+                    chrome.downloads.onChanged.addListener(listener);
+                });
+
+                // --- Post-successful download logic ---
+                if (downloadResult === true) {
+                    downloadedImages.set(fullPath, { timestamp: Date.now(), threadId });
+                    if (!thread.skippedImages.has(filename)) { thread.skippedImages.add(filename); }
+                    thread.downloadedCount = Math.min(thread.skippedImages.size, thread.totalImages);
+
+                    if (downloadedImages.size > MAX_DOWNLOADED_IMAGES) {
+                        const oldest = Array.from(downloadedImages.entries()).sort((a, b) => a[1].timestamp - b[1].timestamp)[0];
+                        downloadedImages.delete(oldest[0]);
+                        log(`Removed oldest entry (${oldest[0]}) from downloadedImages to maintain size limit`, "info");
+                    }
+
+                    chrome.storage.local.set({ downloadedImages: Array.from(downloadedImages.entries()) });
+                    updateWatchedThreads();
+                    log(`Successfully downloaded ${filename} to ${fullPath} for thread ${threadId}`, "success");
+                    debouncedUpdateUI();
+                    return { success: true, downloaded: true };
+                }
+                throw new Error("Download completion promise resolved unexpectedly.");
+
+            } catch (error) {
+                activeDownloads.delete(downloadKey);
+                if (downloadId) { chrome.downloads.erase({ id: downloadId }); }
+                log(`Download attempt ${i + 1}/${MAX_RETRIES} failed for ${url}: ${error.message}`, "warning");
+
+                if (i === MAX_RETRIES - 1) {
+                    log(`Max retries reached for ${url}, marking as failed for this run`, "error");
+                } else {
+                    await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_MS * (i + 1)));
+                    // Check global running state and thread active state *before next retry*
+                    if (!isRunning || !watchedThreads.find(t => t.id === threadId)?.active) {
+                        log(`Stopping retries for ${filename} as thread ${threadId} or process became inactive during wait`, "warning");
+                        throw new Error("Thread or process inactive during retry wait"); // Break retry loop
+                    }
+                }
             }
-            // Update count based on the new set size, capped by total
-            thread.downloadedCount = Math.min(thread.skippedImages.size, thread.totalImages);
-
-            // Manage downloadedImages size limit
-            if (downloadedImages.size > MAX_DOWNLOADED_IMAGES) {
-                const oldest = Array.from(downloadedImages.entries())
-                    .sort((a, b) => a[1].timestamp - b[1].timestamp)[0];
-                downloadedImages.delete(oldest[0]);
-                log(`Removed oldest entry (${oldest[0]}) from downloadedImages to maintain size limit`, "info");
-            }
-
-            // Persist state changes
-            chrome.storage.local.set({
-                downloadedImages: Array.from(downloadedImages.entries()) // Save updated master list
-            });
-            updateWatchedThreads(); // Save updated thread state (count, skipped set)
-            log(`Successfully downloaded ${filename} to ${fullPath} for thread ${threadId}`, "success");
-            debouncedUpdateUI(); // Update UI
-            return { success: true, downloaded: true }; // Indicate success and new download occurred
         }
-        // If downloadResult wasn't true (shouldn't happen with current Promise logic, but safety)
-        throw new Error("Download completion promise resolved unexpectedly.");
+        // If the loop finishes without returning success
+        throw new Error(`Download failed permanently for ${filename} after ${MAX_RETRIES} retries`);
 
-      } catch (error) {
-        // This catches errors from initiation, timeout, interruption, or the post-download logic
-        activeDownloads.delete(downloadKey); // Ensure removed from active map on any error in this attempt
-        // Attempt to clean up the download if an ID was assigned and error occurred
-        if (downloadId) {
-            // Using erase might be better than cancel for retries, removes partial files
-             chrome.downloads.erase({ id: downloadId });
-        }
-        log(`Download attempt ${i + 1}/${MAX_RETRIES} failed for ${url}: ${error.message}`, "warning");
-
-        // Check if it was the last retry
-        if (i === MAX_RETRIES - 1) {
-          log(`Max retries reached for ${url}, marking as failed for this run`, "error");
-          // Don't return yet, let the outer catch handle the final failure state
-        } else {
-            // Wait before retrying, with backoff
-            await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_MS * (i + 1)));
-        }
-         // Re-check if thread or process is still active before next retry
-        if (!isRunning || !watchedThreads.find(t => t.id === threadId)?.active) {
-            log(`Stopping retries for ${filename} as thread ${threadId} or process became inactive`, "warning");
-            throw new Error("Thread or process inactive during retry wait"); // Break retry loop
-        }
-      }
+    } catch (error) {
+        log(`Failed to download ${filename} for thread ${threadId}: ${error.message}`, "error");
+        activeDownloads.delete(downloadKey);
+        return { success: false, downloaded: false };
+    } finally {
+        if (resolveLock) resolveLock();
+        downloadLocks.delete(downloadKey);
     }
-    // If the loop finishes without returning success (i.e., all retries failed)
-    throw new Error(`Download failed permanently for ${filename} after ${MAX_RETRIES} retries`);
-
-  } catch (error) {
-    // Catch errors from the retry loop completion or initial checks/state errors
-    log(`Failed to download ${filename} for thread ${threadId}: ${error.message}`, "error");
-    activeDownloads.delete(downloadKey); // Ensure removed from active map
-    // Don't modify thread state here; let processThread handle errors if needed
-    return { success: false, downloaded: false }; // Indicate failure
-  } finally {
-    // Release the lock regardless of outcome
-    if (resolveLock) resolveLock();
-    downloadLocks.delete(downloadKey); // Clean up lock map entry
-  }
 }
 
 
