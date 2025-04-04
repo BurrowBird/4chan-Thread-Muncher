@@ -137,9 +137,9 @@ function appendLog(message, type = "info") {
 
         if (timeLeftMs > 0) {
             const seconds = Math.max(0, Math.floor(timeLeftMs / 1000));
-            countdownSpan.textContent = `Next: ${seconds}s`;
+            countdownSpan.textContent = `Next Update: ${seconds}s`;
         } else {
-            countdownSpan.textContent = "Next: Now";
+            countdownSpan.textContent = "Next Update: Now";
             // Avoid negative counts, clear interval once expired
              if (refreshInterval) clearInterval(refreshInterval);
         }
