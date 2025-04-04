@@ -20,8 +20,7 @@ Auto-adding threads is based on the last search.
 ----
 
 KNOWN ISSUES:
-When out of focus for a time, Muncher tends to forget what it was doing.
-Sometimes the extension needs to be reloaded a few times to load correctly.
+
 
 -----
 
@@ -41,4 +40,4 @@ In background.js, you might want to adjust these values:
 
 ✱ const STUCK_TIMER = 5 * 60 * 1000;
     Default value is 5 minutes.    
-    Time until a thread is auto-closed when inactive.
+    Time until a thread is auto-closed when inactive. (actually may be longer by up to MANAGE_THREADS_INTERVAL)
