@@ -30,7 +30,6 @@ In background.js, you might want to adjust these values:
 ✱ const RATE_LIMIT_MS = 1500;
     Default value is 1.5 seconds.
     Delay between downloading images in ms.
-    Does not take into account parallel downloads. (room for improvement!)
     Adjust at risk of provoking 4chan.
 
 ✱ const MAX_CONCURRENT_THREADS = 5;
