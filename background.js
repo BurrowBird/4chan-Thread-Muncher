@@ -1685,6 +1685,19 @@ chrome.storage.local.get(["watchedThreads", "lastSearchParams", "downloadedImage
     debouncedUpdateUI(); // Perform initial UI update
 });
 
+// --- Window Close Listener ---
+chrome.windows.onRemoved.addListener((closedWindowId) => {
+    // Check if the window that closed is the control window we know about
+    if (closedWindowId === windowId) {
+        log(`Control window ${closedWindowId} closed. Pausing all threads.`, "info");
+        // Call the existing function that pauses everything
+        stopScraping();
+        // Reset the windowId since it's no longer valid
+        windowId = null;
+        log(`Reset windowId to null.`, "debug"); // Optional debug log
+    }
+});
+
 // Keep-alive mechanism (less critical with Manifest V3 event-driven model, but can help)
 // Consider removing if causing issues. Alarms are the primary method.
 // let keepAliveInterval = setInterval(() => {
