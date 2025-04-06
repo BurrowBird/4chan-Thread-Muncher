@@ -4,6 +4,7 @@ console.log("Content script loaded.");
 let isRunning = false;
 let watchedThreads = [];
 let downloadedImages = new Map(); // Map<fullPath: string, { timestamp: number, threadId: number }>
+let bannedUsernames = new Set(); // Set<string> - stores lowercase usernames
 let activeDownloads = new Map(); // Map<downloadKey: string, downloadId: number | boolean> - boolean used for 'processing' state
 let downloadLocks = new Map(); // Map<downloadKey: string, Promise<void>>
 let openerTabId = null;
@@ -106,6 +107,22 @@ async function downloadImage(url, threadId, username) {
     thread.downloadedCount = thread.downloadedCount || 0;
     thread.totalImages = thread.totalImages || 0;
 
+    // --- Banned Username Check ---
+    // Use raw username (converted to lowercase) for matching the ban list
+    const rawUsernameLower = (username || 'Anonymous').toLowerCase();
+    if (bannedUsernames.has(rawUsernameLower)) {
+        if (!thread.skippedImages.has(filename)) {
+            thread.skippedImages.add(filename);
+            thread.downloadedCount = Math.min(thread.skippedImages.size, thread.totalImages);
+            log(`Skipped image ${filename} for thread ${threadId}: User "${username}" is banned. Count: ${thread.downloadedCount}/${thread.totalImages}`, "info");
+            updateWatchedThreads(); // Save updated thread state
+            debouncedUpdateUI();    // Update UI
+        }
+        return { success: true, downloaded: false }; // Treat as success (skipped), not downloaded
+    }
+    // --- End Banned Username Check ---
+
+
     const fullPath = getFullPath(threadId, username, filename);
     const downloadKey = `${threadId}-${filename}`; // Used for locks and active downloads map
 
@@ -132,7 +149,6 @@ async function downloadImage(url, threadId, username) {
         }
 
         // Check if the thread is active *before* attempting download
-        // Note: This check is less critical now that the listener won't cancel, but still good practice.
         if (!thread.active) {
             // log(`Download skipped for ${url}: Thread ${threadId} is inactive (pre-check)`, "info");
             return { success: false, downloaded: false };
@@ -348,6 +364,7 @@ function updateUI() {
           totalImages: thread.totalImages || 0
         })),
         trackedDownloads: downloadedImages.size,
+        bannedUsernames: Array.from(bannedUsernames), // Send banned list
         nextManageThreads: chrome.alarms.get("manageThreads")?.scheduledTime || null // Get next alarm time
       }, () => {
           if (chrome.runtime.lastError) {
@@ -494,7 +511,7 @@ async function processThread(thread) {
 
             // Only attempt download if not already skipped in this thread's context
             if (!thread.skippedImages.has(filename)) {
-                const result = await downloadImage(imageUrl, thread.id, post.name);
+                const result = await downloadImage(imageUrl, thread.id, post.name); // Pass post.name as username
                 if (result.success && result.downloaded) {
                     downloadedInRun++;
                     // Optional short pause after successful download to ease load
@@ -502,6 +519,9 @@ async function processThread(thread) {
                 } else if (!result.success) {
                     // Logged inside downloadImage. Consider if pausing thread on failure is desired.
                     // Maybe break loop if multiple sequential failures? For now, continue.
+                } else if (result.success && !result.downloaded) {
+                    // This means it was skipped (e.g., banned user) or already existed.
+                    // Logging is handled inside downloadImage for bans.
                 }
             }
              // Re-check activity status after each potential download/wait
@@ -705,6 +725,7 @@ async function resumeActiveThreads() {
         thread.skippedImages = thread.skippedImages || new Set(); // Ensure exists
         const threadSpecificSkipped = new Set(); // Build a fresh set for accuracy
 
+        // First, add items based on global download history
         for (const [path, imgData] of downloadedImages) {
             if (imgData.threadId === thread.id) {
             const filename = path.split('/').pop();
@@ -713,7 +734,17 @@ async function resumeActiveThreads() {
             }
             }
         }
-        // Merge any items that might have been in the thread's set but not (yet) in master list? Unlikely.
+        // Second, add items based on banned users (re-evaluate against current post list)
+         data.posts.forEach(post => {
+             if (post.tim && post.ext) {
+                 const rawUsernameLower = (post.name || 'Anonymous').toLowerCase();
+                 if (bannedUsernames.has(rawUsernameLower)) {
+                     const filename = `${post.tim}${post.ext}`;
+                     threadSpecificSkipped.add(filename);
+                 }
+             }
+         });
+
         // Replace the old set with the rebuilt one for accuracy.
         thread.skippedImages = threadSpecificSkipped;
         const rebuiltSkippedCount = thread.skippedImages.size;
@@ -759,7 +790,7 @@ async function resumeActiveThreads() {
 chrome.runtime.onStartup.addListener(() => {
   log("Service worker started (onStartup event).", "info");
   // Re-initialize state and alarms
-  chrome.storage.local.get(["watchedThreads", "lastSearchParams", "downloadedImages", "isRunning"], async (result) => {
+  chrome.storage.local.get(["watchedThreads", "lastSearchParams", "downloadedImages", "isRunning", "bannedUsernames"], async (result) => {
        await initializeState(result); // Use the main init function
        if (isRunning) {
            log("onStartup: isRunning was true, attempting to sync/process active threads.", "info");
@@ -1347,9 +1378,17 @@ function forgetThreadDownloads(threadId) {
       log(`No master download history entries found for thread ${threadId}.`, "info");
   }
 
+  // --- Re-apply bans to skipped set ---
+  // After clearing, we need to re-add skips based on banned users for this thread.
+  // This requires fetching the thread data again. Consider if this is too heavy.
+  // Alternative: Keep track of banned-user skips separately?
+  // Let's skip the re-fetch for now; the next processThread cycle will re-add them.
+  log(`Cleared skipped set for thread ${threadId}. Count reset to 0. Banned user skips will re-apply on next process cycle.`, "info");
+
+
   updateWatchedThreads(); // Save the reset thread state (count, skipped set)
 
-  log(`Finished forgetting downloads for thread "${thread.title}" (${threadId}). Cleared ${initialSkippedSize} skipped entries. Count reset to 0.`, "success");
+  // log(`Finished forgetting downloads for thread "${thread.title}" (${threadId}). Cleared ${initialSkippedSize} skipped entries. Count reset to 0.`, "success"); // Adjusted log message
   debouncedUpdateUI();
 
   // If the thread is currently active, trigger processing to re-scan it
@@ -1373,7 +1412,10 @@ function forgetAllDownloads() {
     thread.downloadedCount = 0;       // Reset count to 0
     thread.error = false; // Clear errors
     // Keep active/closed status as is
+    // Re-applying bans is complex here without fetching all threads.
+    // Let the next process cycle handle re-adding ban skips.
   });
+  log(`Cleared skipped sets for all threads. Banned user skips will re-apply on next process cycle.`, "info");
 
   // Clear from storage
   chrome.storage.local.remove("downloadedImages", () => {
@@ -1394,6 +1436,53 @@ function forgetAllDownloads() {
   }
 }
 
+// --- Manage Banned Usernames ---
+function addBannedUsername(username) {
+    const usernameLower = username.trim().toLowerCase();
+    if (!usernameLower) {
+        log("Cannot add empty username to ban list.", "warning");
+        return false;
+    }
+    if (bannedUsernames.has(usernameLower)) {
+        log(`Username "${username}" is already banned.`, "info");
+        return false;
+    }
+    bannedUsernames.add(usernameLower);
+    chrome.storage.local.set({ bannedUsernames: Array.from(bannedUsernames) });
+    //log(`Banned username: "${username}" (stored as "${usernameLower}"). Total bans: ${bannedUsernames.size}`, "success");
+    debouncedUpdateUI(); // Update UI with the new list
+    return true;
+}
+
+function removeBannedUsername(username) {
+    const usernameLower = username.trim().toLowerCase();
+    if (!bannedUsernames.has(usernameLower)) {
+        log(`Username "${username}" not found in ban list.`, "warning");
+        return false;
+    }
+    bannedUsernames.delete(usernameLower);
+    chrome.storage.local.set({ bannedUsernames: Array.from(bannedUsernames) });
+    //log(`Removed username "${username}" from ban list. Total bans: ${bannedUsernames.size}`, "success");
+    debouncedUpdateUI(); // Update UI
+    return true;
+}
+// --- End Manage Banned Usernames ---
+
+// New function to clear all banned usernames
+function clearBannedUsernames() {
+    log("Clearing all banned usernames...", "warning");
+    bannedUsernames.clear();
+    chrome.storage.local.set({ bannedUsernames: [] }, () => {
+        if (chrome.runtime.lastError) {
+            log(`Error clearing bannedUsernames from storage: ${chrome.runtime.lastError.message}`, "error");
+            return false;
+        }
+        log(`Banned usernames list cleared.`, "success");
+        debouncedUpdateUI();
+        return true;
+    });
+    return true; // Optimistic return, storage callback is async
+}
 
 function cleanupOldDownloads() {
     const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
@@ -1418,6 +1507,7 @@ function cleanupOldDownloads() {
 setInterval(cleanupOldDownloads, 24 * 60 * 60 * 1000);
 
 
+// --- Message Listener ---
 // --- Message Listener ---
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const messageType = message.type;
@@ -1444,6 +1534,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 totalImages: thread.totalImages || 0
               })),
               trackedDownloads: downloadedImages.size,
+              bannedUsernames: Array.from(bannedUsernames), // Include banned list
               nextManageThreads: nextTime // Send the correctly retrieved time
           });
       })
@@ -1460,6 +1551,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 totalImages: thread.totalImages || 0
               })),
               trackedDownloads: downloadedImages.size,
+              bannedUsernames: Array.from(bannedUsernames), // Still send current list
               nextManageThreads: null, // Indicate error by sending null
               error: "Failed to retrieve alarm status"
            });
@@ -1468,7 +1560,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Crucial: Indicate that sendResponse will be called asynchronously
     return true;
   }
-  // --- Other message handlers remain the same ---
+  // --- Other message handlers ---
   else if (messageType === "start") {
     if (!isInitialized) {
       log("Start request received before initialization, delaying...", "info");
@@ -1529,6 +1621,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (messageType === "getLastSearchParams") {
     // This is synchronous
     sendResponse(lastSearchParams);
+  } else if (messageType === "getBannedUsernames") { // New handler
+      sendResponse({ success: true, bannedUsernames: Array.from(bannedUsernames) });
+  } else if (messageType === "addBannedUsername") { // New handler
+      const success = addBannedUsername(message.username);
+      sendResponse({ success });
+  } else if (messageType === "removeBannedUsername") { // New handler
+      const success = removeBannedUsername(message.username);
+      sendResponse({ success });
+  } else if (messageType === "clearBannedUsernames") { // New handler
+      const success = clearBannedUsernames();
+      sendResponse({ success });
   } else if (messageType === "syncThreadCounts") {
      // This operation itself might take time but sendResponse is called synchronously at the end
      //log("Manual sync requested. Rebuilding state for all threads...", "info");
@@ -1538,18 +1641,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const initialSkippedSize = thread.skippedImages?.size || 0;
         const initialCount = thread.downloadedCount;
 
-        // Rebuild skipped from master list
+        // Rebuild skipped from master list AND bans
         const threadSpecificSkipped = new Set();
         for (const [path, imgData] of downloadedImages) {
             if (imgData.threadId === thread.id) {
-            const filename = path.split('/').pop();
-            if (filename) threadSpecificSkipped.add(filename);
+                const filename = path.split('/').pop();
+                if (filename) threadSpecificSkipped.add(filename);
             }
         }
+        // Re-check bans (Requires fetch or cached post list - skipping for now in manual sync)
+        // For full accuracy, fetch would be needed here. Assuming existing set + download map is sufficient for manual sync.
+        // log(`Manual Sync: Banned user check skipped during manual sync for thread ${thread.id}. Relying on existing skipped set and download history.`, "debug");
+
          // Merge potentially existing skipped items (safer)
          const originalSkipped = thread.skippedImages || new Set();
+         originalSkipped.forEach(item => threadSpecificSkipped.add(item)); // Ensure items only in the thread's list are kept
          thread.skippedImages = threadSpecificSkipped;
-         originalSkipped.forEach(item => thread.skippedImages.add(item));
 
         const rebuiltSkippedCount = thread.skippedImages.size;
         // Ensure totalImages is non-negative before capping
@@ -1654,6 +1761,24 @@ async function initializeState(result) {
         downloadedImages = new Map(); // Initialize if missing or not an array
     }
 
+    // Load banned usernames
+    if (result.bannedUsernames && Array.isArray(result.bannedUsernames)) {
+        try {
+            // Ensure all are lowercase strings
+            bannedUsernames = new Set(result.bannedUsernames.map(u => String(u).toLowerCase()));
+            log(`Loaded ${bannedUsernames.size} banned usernames.`, "info");
+        } catch(e) {
+             log(`Error converting stored bannedUsernames to Set, resetting. Error: ${e.message}`, "error");
+             bannedUsernames = new Set();
+             chrome.storage.local.remove("bannedUsernames");
+        }
+    } else {
+        bannedUsernames = new Set(); // Initialize if missing or invalid
+        log("Initialized empty banned usernames list.", "info");
+        // Save the empty list initially if it didn't exist
+        chrome.storage.local.set({ bannedUsernames: [] });
+    }
+
     // Load running state
     isRunning = result.isRunning || false;
     // Correct isRunning state based on loaded threads
@@ -1665,8 +1790,8 @@ async function initializeState(result) {
     }
 
 
-    updateWatchedThreads(); // Save potentially sanitized state back to storage
-    log(`Initialization complete. ${watchedThreads.length} threads loaded. ${downloadedImages.size} downloads tracked. isRunning: ${isRunning}`, "info");
+    updateWatchedThreads(); // Save potentially sanitized thread state back to storage
+    log(`Initialization complete. ${watchedThreads.length} threads loaded. ${downloadedImages.size} downloads tracked. ${bannedUsernames.size} users banned. isRunning: ${isRunning}`, "info");
     isInitialized = true; // Mark as initialized
 
     // Perform initial cleanup of old downloads
@@ -1674,7 +1799,7 @@ async function initializeState(result) {
 }
 
 // Load state when the service worker starts
-chrome.storage.local.get(["watchedThreads", "lastSearchParams", "downloadedImages", "isRunning"], async (result) => {
+chrome.storage.local.get(["watchedThreads", "lastSearchParams", "downloadedImages", "isRunning", "bannedUsernames"], async (result) => {
     await initializeState(result);
     // After state is loaded and sanitized:
     if (isRunning) {

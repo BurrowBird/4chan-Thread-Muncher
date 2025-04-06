@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta charset="UTF-8">
   <title>4chan Thread Muncher 9000</title>
   <style>
     :root {
@@ -17,6 +18,7 @@
       --info-color: #8ab4f8; /* Blue */
       --closed-color: #808080; /* Grey */
       --accent-color: #a78bfa; /* Purple */
+      --danger-hover: #d93025; /* Darker Red */
     }
 
     body.dark-mode {
@@ -33,6 +35,7 @@
       --info-color: #8aadf4; /* Catppuccin Macchiato Blue */
       --closed-color: #6e738d; /* Catppuccin Macchiato Overlay1 */
       --accent-color: #c6a0f6; /* Catppuccin Macchiato Mauve */
+      --danger-hover: #e64553; /* Lighter Red for dark mode */
     }
 
     body {
@@ -66,7 +69,7 @@
     #log-container {
         flex-shrink: 1; /* Allow shrinking */
         height: 200px; /* Initial height */
-        min-height: 100px; /* Minimum height */
+        min-height: 150px; /* Minimum height */
         overflow: hidden; /* Hide overflow */
         display: flex; /* Use flexbox */
         flex-direction: column; /* Stack elements vertically */
@@ -74,7 +77,6 @@
         border-radius: 4px;
         margin-top: 15px; /* Add margin above log */
     }
-
 
     #log {
       flex-grow: 1; /* Allow log div to grow */
@@ -92,7 +94,6 @@
     .warning { color: var(--warning-color); }
     .error { color: var(--error-color); }
     .debug { color: var(--accent-color); opacity: 0.7; } /* Optional debug style */
-
 
     button {
       margin: 0 5px; /* Removed top/bottom margin, use flex gap */
@@ -130,14 +131,18 @@
 
     .input-group {
         display: flex;
-        gap: 10px; /* Space between inputs */
+        gap: 10px; /* Space between items */
         margin-bottom: 10px;
         flex-wrap: wrap; /* Allow wrapping on smaller screens */
+        align-items: center; /* Align items vertically */
     }
      .input-group > * {
-        margin: 0; /* Remove default margins from inputs/placeholders inside */
+        margin: 0; /* Remove default margins from items inside */
     }
-
+    .input-group > label {
+        font-weight: bold;
+        white-space: nowrap;
+    }
 
     #thread-count-container { /* Renamed from timer */
       font-size: 14px;
@@ -148,7 +153,7 @@
       gap: 15px; /* Space between counts and timer */
       margin-left: 10px; /* Space from buttons */
     }
-	
+
     #countdown-timer {
         font-size: 14px;
         opacity: 0.9;
@@ -164,8 +169,8 @@
         margin-top: 10px;
         border-top: 1px solid var(--border-color);
         padding-top: 10px;
+        min-height: 200px; /* Ensure it has some minimum height */
     }
-
 
     #threads {
       /* Removed margin, handled by container */
@@ -244,7 +249,6 @@
         margin: 0; /* Remove margin for alignment */
     }
 
-
     hr.thread-separator {
       border: none;
       border-top: 1px dashed var(--border-color);
@@ -260,8 +264,100 @@
     }
      .danger-button:hover:not(:disabled) {
         background-color: color-mix(in srgb, var(--error-color) 80%, black); /* Darken on hover */
+        border-color: color-mix(in srgb, var(--error-color) 80%, black);
+     }
+     body.dark-mode .danger-button:hover:not(:disabled) {
+        background-color: var(--danger-hover); /* Use variable for dark mode */
+        border-color: var(--danger-hover);
      }
 
+ /* Ban Management Styles */
+    #ban-management {
+        margin-top: 15px;
+        padding: 15px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        background-color: var(--input-bg);
+        /* Add transition for smooth collapse */
+        transition: padding 0.3s ease;
+    }
+    #ban-management h3 {
+        margin-top: 0;
+        margin-bottom: 10px;
+        font-size: 16px;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 5px;
+        cursor: pointer; /* Make title clickable */
+        display: flex; /* Align title and icon */
+        justify-content: space-between; /* Space out title and icon */
+        align-items: center; /* Vertically align */
+    }
+.toggle-icon {
+    display: inline-block;
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-bottom: 6px solid var(--text-color); /* Arrow pointing up */
+    vertical-align: middle;
+    margin-left: 5px;
+}
+    #ban-content {
+        /* Transition for smooth collapse/expand */
+        max-height: 500px; /* Set a max-height for transition */
+        overflow: hidden;
+        transition: max-height 0.4s ease-out, opacity 0.3s ease-out, margin-top 0.3s ease-out;
+        opacity: 1;
+        margin-top: 10px; /* Add space below the header when expanded */
+    }
+
+    /* Collapsed state */
+    #ban-management.collapsed #ban-content {
+        max-height: 0;
+        opacity: 0;
+        margin-top: 0; /* Remove margin when collapsed */
+        /* We might still need padding/border adjustment on the parent if needed */
+    }
+	#ban-management.collapsed .toggle-icon {
+		transform: rotate(180deg); /* Rotates to point down */
+	}
+
+#banned-users-list {
+    max-height: 150px; /* Keep scrollable if it overflows */
+    overflow-y: auto;
+    padding: 5px 8px;
+    margin: 10px 0 0 0; /* Margin top only */
+    font-size: 13px;
+    min-height: 20px; /* Ensure some height even when empty */
+}
+.banned-user-item {
+    display: inline-block; /* Display items inline */
+    margin-right: 5px; /* Space before semicolon */
+    cursor: pointer; /* Indicate clickability */
+    padding: 2px 5px; /* Add some padding for better click area */
+    border-radius: 3px; /* Slight rounding */
+    transition: background-color 0.2s; /* Smooth hover effect */
+}
+.banned-user-item:hover {
+    background-color: var(--button-hover); /* Hover effect */
+}
+.banned-user-item:not(:last-child)::after {
+    content: ";"; /* Add semicolon after each item except the last */
+    margin-left: 5px; /* Space after the username before semicolon */
+    color: var(--text-color); /* Match text color */
+}
+/* Style for empty state */
+#banned-users-list:empty::before {
+    content: "No banned users yet.";
+    opacity: 0.7;
+    display: block; /* Ensure it takes full width when empty */
+}
+    .banned-user-item:last-child {
+        border-bottom: none;
+    }
+#ban-toggle {
+    font-weight: normal;
+}
 
   </style>
 </head>
@@ -280,31 +376,50 @@
 
   <div class="action-buttons">
     <div class="action-buttons-left">
-      <button id="startBtn">Add/Search Threads</button>
-      <button id="pauseAllBtn">Pause All</button>
-      <button id="resumeAllBtn">Resume All</button>
-      <div id="thread-count-container"> <!-- Contains counts and timer -->
-          <span id="thread-count">0 / 0 Active Threads</span> <!-- Simplified initial text -->
-          <span id="countdown-timer">Next: ---</span>
-      </div>
+        <button id="startBtn">Add/Search Threads</button>
+        <button id="pauseAllBtn">Pause All</button>
+        <button id="resumeAllBtn">Resume All</button>
+        <div id="thread-count-container">
+            <span id="thread-count">0 / 0 Active Threads</span>
+            <span id="countdown-timer">Next: ---</span>
+        </div>
     </div>
     <div class="action-buttons-right">
-        <button id="syncCountsBtn">Sync Counts</button> <!-- Added Sync Button -->
-        <button id="forgetAllBtn" class="danger-button">Forget All History</button> <!-- Added Forget All -->
+        <button id="syncCountsBtn">Sync Counts</button>
+        <button id="forgetAllBtn" class="danger-button">Forget All History</button>
     </div>
-  </div>
+</div>
 
-  <div id="threads-container"> <!-- Scrollable container for threads -->
-      <div id="threads">
-          <!-- Thread elements will be injected here -->
-      </div>
-  </div>
+<div id="threads-container">
+    <div id="threads">
+        <!-- Thread elements will be injected here -->
+    </div>
+</div>
 
-  <div id="log-container"> <!-- Container for the log -->
-      <div id="log">
-          <!-- Log messages will be injected here -->
-      </div>
-  </div>
+<!-- Ban Management Section -->
+<div id="ban-management">
+    <h3 id="ban-toggle">Banned Usernames <span class="toggle-icon"></span></h3>
+    <div id="ban-content">
+        <div class="input-group">
+            <label for="banUsernameInput">Username:</label>
+            <input type="text" id="banUsernameInput" placeholder="Enter username to ban">
+            <button id="addBanBtn">Add Ban</button>
+        </div>
+        <div class="input-group" style="justify-content: space-between; align-items: flex-start;">
+            <div id="banned-users-list">
+                <!-- Banned usernames will be injected here -->
+            </div>
+            <button id="clearBanListBtn" class="danger-button">Clear List</button>
+        </div>
+    </div>
+</div>
+
+<!-- Log Container Section -->
+<div id="log-container">
+    <div id="log">
+        <!-- Log messages will be injected here -->
+    </div>
+</div>
 
   <script src="control.js"></script>
 </body>
