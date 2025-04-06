@@ -600,7 +600,7 @@ async function resumeActiveThreads() {
 
       if (data.posts[0].closed === 1 || data.posts[0].archived === 1) {
         log(`Thread "${thread.title}" (${thread.id}) resume check: Thread now ${data.posts[0].closed ? 'closed' : 'archived'}. Closing locally.`, "info");
-        CANthread.closed = true;
+        thread.closed = true;
         thread.active = false;
         thread.error = false;
         threadProgressTimers.delete(thread.id);
@@ -1039,24 +1039,19 @@ function toggleThread(threadId) {
     chrome.storage.local.set({ isRunning });
 
   } else {
-    if (thread.closed) {
-      log(`Cannot activate thread "${thread.title}" (${threadId}) because it is marked as closed.`, "warning");
-      return;
-    }
-    if (thread.error) {
-      log(`Retrying errored thread "${thread.title}" (${threadId})`, "info");
-      thread.error = false;
-    }
-
     const activeCount = watchedThreads.filter(t => t.active && !t.error && !t.closed).length;
     if (activeCount >= MAX_CONCURRENT_THREADS) {
       log(`Cannot activate thread "${thread.title}" (${threadId}): Maximum concurrent threads (${MAX_CONCURRENT_THREADS}) reached.`, "warning");
       return;
     }
 
-    log(`Resuming thread "${thread.title}" (${threadId})`, "info");
+    log(`Resuming thread "${thread.title}" (${threadId})${thread.closed ? ' (previously closed)' : ''}${thread.error ? ' (retrying from error)' : ''}`, "info");
     thread.active = true;
     thread.error = false;
+    if (thread.closed) {
+      thread.closed = false; // Reset closed status when resuming
+      log(`Thread "${thread.title}" (${threadId}) closed status cleared upon resume.`, "info");
+    }
     isRunning = true;
     chrome.storage.local.set({ isRunning });
     updateWatchedThreads();
