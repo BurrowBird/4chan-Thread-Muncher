@@ -1240,18 +1240,15 @@ function toggleThread(threadId) {
       return;
     }
 
-    log(`Resuming thread "${thread.title}" (${threadId})`, "info");
+log(`Resuming thread "${thread.title}" (${threadId})`, "info");
     thread.active = true;
-    isRunning = true; // Ensure global state is running
+    thread.error = false;
+    isRunning = true;
     chrome.storage.local.set({ isRunning });
-
-    // Trigger sync/processing via manageThreads after state update
-     updateWatchedThreads();
-     manageThreads(); // Let manageThreads schedule the processing
-
+    updateWatchedThreads();
+    manageThreads(); // Add this
   }
-
-  updateWatchedThreads(); // Save the toggled state
+  updateWatchedThreads();
   debouncedUpdateUI();
 }
 
@@ -1348,6 +1345,13 @@ function forgetThreadDownloads(threadId) {
     log(`ForgetThreadDownloads: Thread ${threadId} not found.`, "error");
     return false;
   }
+
+activeDownloads.forEach((_, key) => {
+  if (key.startsWith(`${threadId}-`)) activeDownloads.delete(key);
+});
+downloadLocks.forEach((_, key) => {
+  if (key.startsWith(`${threadId}-`)) downloadLocks.delete(key);
+});
 
   log(`Forgetting download history for thread "${thread.title}" (${threadId})...`, "warning");
   const initialSkippedSize = thread.skippedImages?.size || 0;
