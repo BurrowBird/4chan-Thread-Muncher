@@ -11,7 +11,7 @@ If the constant download popups are annoying, you can disable chrome's download 
 Muncher is 99 % vibe coded, using free versions of Grok, Claude and Gemini.
 Muncher has some quirks. Feel free to fix them.
 
-Muncher tries to prevent downloading duplicates by various means.
+Muncher tries to prevent downloading duplicates.
 If you want to redownload the same thread twice, use the Forget buttons.
 
 You can add threads by ID or via a search (within a board).
