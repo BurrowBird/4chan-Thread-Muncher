@@ -21,6 +21,7 @@ Auto-adding threads is based on the last search.
 
 KNOWN ISSUES:
 
+Still likes to time out.
 
 -----
 
