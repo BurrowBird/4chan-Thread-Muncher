@@ -8,8 +8,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const maxThreadsInput = document.getElementById("maxThreadsInput"); // --- NEW
 
   // Button Elements
+  const addWatchJobBtn = document.getElementById("addWatchJobBtn");
+  const addThreadByIdBtn = document.getElementById("addThreadByIdBtn");
   const clearBanListBtn = document.getElementById("clearBanListBtn");
-  const startBtn = document.getElementById("startBtn");
   const pauseAllBtn = document.getElementById("pauseAllBtn");
   const resumeAllBtn = document.getElementById("resumeAllBtn");
   const modeToggleBtn = document.getElementById("modeToggle");
@@ -18,6 +19,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const addBanBtn = document.getElementById("addBanBtn");
 
   // Display Elements
+  const watchJobsContainer = document.getElementById("watch-jobs-container");
   const logDiv = document.getElementById("log");
   const threadCountSpan = document.getElementById("thread-count");
   const threadsDiv = document.getElementById("threads");
@@ -181,12 +183,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   applyBanSectionState();
 
-  // Fetch last used parameters from storage
-  chrome.runtime.sendMessage({ type: "getLastSearchParams" }, (params) => {
-    if (params) {
-      boardInput.value = params.board || '';
-      searchTermInput.value = params.searchTerm || '';
-      downloadPathInput.value = params.downloadPath || '4chan_downloads';
+  // Fetch saved download path from storage
+  chrome.runtime.sendMessage({ type: "getSavedPath" }, (response) => {
+    if (response && response.downloadPath) {
+      downloadPathInput.value = response.downloadPath;
+    } else {
+      downloadPathInput.value = '4chan_downloads';
     }
   });
 
@@ -248,6 +250,37 @@ document.addEventListener("DOMContentLoaded", () => {
       }
   }
 
+  // --- NEW: Render Watch Jobs ---
+  function renderWatchJobs(jobs) {
+      watchJobsContainer.innerHTML = ''; // Clear previous list
+      if (!jobs || jobs.length === 0) {
+          // CSS :empty pseudo-class will show the message
+          return;
+      }
+
+      const fragment = document.createDocumentFragment();
+      jobs.forEach(job => {
+          const jobDiv = document.createElement('div');
+          jobDiv.className = 'watch-job-item';
+          jobDiv.dataset.jobId = job.id;
+
+          const jobText = document.createElement('span');
+          jobText.className = 'watch-job-text';
+          jobText.textContent = `Watching: /${job.board}/ for "${job.searchTerm}"`;
+          jobDiv.appendChild(jobText);
+
+          const removeBtn = document.createElement('span');
+          removeBtn.className = 'watch-job-remove';
+          removeBtn.innerHTML = '&times;';
+          removeBtn.title = 'Remove this watch job';
+          removeBtn.addEventListener('click', () => {
+              chrome.runtime.sendMessage({ type: "removeWatchJob", id: job.id }, requestStatusUpdate);
+          });
+          jobDiv.appendChild(removeBtn);
+          fragment.appendChild(jobDiv);
+      });
+      watchJobsContainer.appendChild(fragment);
+  }
   // --- UI Updates ---
 
   function requestStatusUpdate() {
@@ -430,7 +463,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function setButtonsDisabled(disabled) {
-      startBtn.disabled = disabled;
+      addWatchJobBtn.disabled = disabled;
+      addThreadByIdBtn.disabled = disabled;
       pauseAllBtn.disabled = disabled;
       resumeAllBtn.disabled = disabled;
       forgetAllBtn.disabled = disabled;
@@ -445,6 +479,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!status || !status.watchedThreads) {
           console.warn("updateUI called with invalid status object:", status);
           renderThreads([]);
+          renderWatchJobs([]);
           renderBannedUsernames([]);
           threadCountSpan.textContent = `Status Unavailable`;
           countdownSpan.textContent = `Next: ---`;
@@ -457,7 +492,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const activeThreads = status.watchedThreads.filter(t => t.active && !t.closed && !t.error);
       const pausedThreads = status.watchedThreads.filter(t => !t.active && !t.closed && !t.error);
 
-      startBtn.textContent = "Add/Search Threads";
       pauseAllBtn.disabled = activeThreads.length === 0;
       resumeAllBtn.disabled = pausedThreads.length === 0;
 
@@ -470,6 +504,7 @@ document.addEventListener("DOMContentLoaded", () => {
       maxThreadsInput.value = maxCount;
 
       renderThreads(status.watchedThreads);
+      renderWatchJobs(status.watchJobs || []);
       renderBannedUsernames(status.bannedUsernames || []);
   }
 
@@ -481,30 +516,18 @@ document.addEventListener("DOMContentLoaded", () => {
       requestStatusUpdate();
   });
 
-  startBtn.addEventListener("click", () => {
+  addWatchJobBtn.addEventListener("click", () => {
       const searchTerm = searchTermInput.value.trim();
-      const threadId = threadIdInput.value.trim();
       const board = boardInput.value.trim();
-      const downloadPath = downloadPathInput.value.trim() || "4chan_downloads";
 
       if (!board) {
           appendLog("Board input is required.", "error");
           boardInput.focus();
           return;
       }
-      if (!searchTerm && !threadId) {
-          appendLog("Either Search Term or Thread ID is required.", "error");
+      if (!searchTerm) {
+          appendLog("Search Term is required to add a watch job.", "error");
           searchTermInput.focus();
-          return;
-      }
-      if (!/^[a-z0-9]+$/i.test(board)) {
-          appendLog("Invalid board format (should be alphanumeric, e.g., 'wg', 'g', 'pol').", "error");
-          boardInput.focus();
-          return;
-      }
-      if (threadId && !/^\d+$/.test(threadId)) {
-          appendLog("Invalid Thread ID format (should be numeric).", "error");
-          threadIdInput.focus();
           return;
       }
 
@@ -528,13 +551,32 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       // --- End Save to History ---
 
-      startBtn.disabled = true;
-      startBtn.textContent = "Starting...";
-      chrome.runtime.sendMessage({ type: "start", searchTerm, threadId, board, downloadPath }, (response) => {
+      addWatchJobBtn.disabled = true;
+      chrome.runtime.sendMessage({ type: "addWatchJob", board, searchTerm }, (response) => {
           if (response?.success) {
+              appendLog(`Watch job for /${board}/ - "${searchTerm}" added.`, "success");
+              //searchTermInput.value = ''; // Clear input on success
           } else {
-              appendLog(`Start request failed: ${response?.error || 'Unknown error'}`, "error");
+              appendLog(`Failed to add watch job. It may already exist or regex is invalid.`, "error");
           }
+          addWatchJobBtn.disabled = false;
+          requestStatusUpdate();
+      });
+  });
+
+  addThreadByIdBtn.addEventListener("click", () => {
+      const threadId = threadIdInput.value.trim();
+      const board = boardInput.value.trim();
+      if (!board || !threadId) {
+          appendLog("Board and Thread ID are required.", "error");
+          return;
+      }
+      addThreadByIdBtn.disabled = true;
+      chrome.runtime.sendMessage({ type: "start", board, threadId }, (response) => {
+          if(response?.success) {
+            threadIdInput.value = ''; // Clear on success
+          }
+          addThreadByIdBtn.disabled = false;
           requestStatusUpdate();
       });
   });
@@ -632,6 +674,12 @@ document.addEventListener("DOMContentLoaded", () => {
       isBanSectionCollapsed = !isBanSectionCollapsed;
       localStorage.setItem("banSectionCollapsed", isBanSectionCollapsed);
       applyBanSectionState();
+  });
+
+  // --- NEW: Update download path on change ---
+  downloadPathInput.addEventListener("change", () => {
+    const newPath = downloadPathInput.value.trim();
+    chrome.runtime.sendMessage({ type: "updateDownloadPath", path: newPath });
   });
 
   // --- Background Message Handling ---

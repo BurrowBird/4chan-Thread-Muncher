@@ -4,12 +4,12 @@ console.log("Content script loaded.");
 let isRunning = false;
 let watchedThreads = [];
 let downloadedImages = new Map(); // Map<fullPath: string, { timestamp: number, threadId: number }>
+let watchJobs = []; // -- NEW: Replaces lastSearchParams for multi-watching
 let bannedUsernames = new Set(); // Set<string> - stores lowercase usernames
 let activeDownloads = new Map(); // Map<downloadKey: string, downloadId: number | boolean> - boolean used for 'processing' state
 let downloadLocks = new Map(); // Map<downloadKey: string, Promise<void>>
 let openerTabId = null;
 let windowId = null;
-let lastSearchParams = { board: '', searchTerm: '', downloadPath: '4chan_downloads' };
 let threadProgressTimers = new Map(); // Map<threadId: number, timestamp: number>
 let isResuming = false;
 let lastResumeTime = 0;
@@ -17,6 +17,7 @@ let lastLogMessage = null;
 let isInitialized = false;
 
 // --- MODIFIED: Use 'let' and load from storage ---
+let downloadPath = '4chan_downloads'; // -- NEW: Global download path
 let MAX_CONCURRENT_THREADS = 5; 
 const STUCK_TIMER = 5 * 60 * 1000; // 5 minutes
 const MANAGE_THREADS_INTERVAL = 1; // 1 minute
@@ -137,7 +138,7 @@ function getFullPath(threadId, username, filename) {
   const sanitizedUsername = username ? username.replace(/[^a-zA-Z0-9_.-]/g, "_") : "Anonymous";
   const sanitizedFilename = filename ? filename.replace(/[^a-zA-Z0-9_.-]/g, "_") : "unknown_file";
   // Ensure download path doesn't have leading/trailing slashes for consistency
-  const cleanDownloadPath = lastSearchParams.downloadPath.replace(/^\/+|\/+$/g, '');
+  const cleanDownloadPath = downloadPath.replace(/^\/+|\/+$/g, '');
   return `${cleanDownloadPath}/${threadId}/${sanitizedUsername}/${sanitizedFilename}`;
 }
 
@@ -411,6 +412,7 @@ function updateUI() {
           totalImages: thread.totalImages || 0
         })),
         trackedDownloads: downloadedImages.size,
+        watchJobs: watchJobs, // --- NEW: Send watch jobs to UI
         bannedUsernames: Array.from(bannedUsernames), // Send banned list
         nextManageThreads: chrome.alarms.get("manageThreads")?.scheduledTime || null, // Get next alarm time
         maxConcurrentThreads: MAX_CONCURRENT_THREADS // --- NEW: Send current value to UI
@@ -501,7 +503,6 @@ async function processThread(thread) {
         thread.error = false; // Not an error, just closed state
         threadProgressTimers.delete(thread.id); // Remove any stuck timer
         updateWatchedThreads();
-        debouncedUpdateUI();
         activeDownloads.delete(`${thread.id}-processing`);
         await checkForNewThreads(); // Check if we need to start a new thread
         return; // Stop processing this closed thread
@@ -711,7 +712,7 @@ async function manageThreads() {
 
   // --- Check if new threads need to be searched for ---
   const currentActiveCount = watchedThreads.filter(t => t.active && !t.closed && !t.error).length;
-  if (currentActiveCount < MAX_CONCURRENT_THREADS && isRunning) {
+  if (currentActiveCount < MAX_CONCURRENT_THREADS && (isRunning || watchJobs.length > 0)) {
       await checkForNewThreads();
   }
 
@@ -762,7 +763,7 @@ async function resumeActiveThreads() {
   for (const thread of activeThreads) {
       if (!thread.active || thread.closed || thread.error) continue; // Re-check state
 
-      log(`Syncing state for thread "${thread.title}" (${thread.id})...`, "debug");
+      //log(`Syncing state for thread "${thread.title}" (${thread.id})...`, "debug");
       try {
         // --- MODIFIED: Use the new rate limiter ---
         // Fetch latest data first
@@ -866,21 +867,21 @@ chrome.runtime.onStartup.addListener(() => {
 
 // Listener for when the extension is installed or updated
 chrome.runtime.onInstalled.addListener(details => {
-    log(`Extension ${details.reason}. Initializing...`, "info");
-    setupAlarms(); // Set up alarms on first install/update
-    // Optionally clear state on update if needed:
-    // if (details.reason === "update") {
-    //   chrome.storage.local.clear(() => {
-    //     log("Cleared storage on update.", "info");
-    //   });
-    // }
+  log(`Extension ${details.reason}. Initializing...`, "info");
+  setupAlarms(); // Set up alarms on first install/update
+  // Optionally clear state on update if needed:
+  // if (details.reason === "update") {
+  //   chrome.storage.local.clear(() => {
+  //     log("Cleared storage on update.", "info");
+  //   });
+  // }
 });
 
 
 async function directoryExists(threadId) {
     // This is an imperfect check based on previously downloaded files.
     // A more robust check would require chrome.downloads.search with specific path, which can be slow.
-    const cleanDownloadPath = lastSearchParams.downloadPath.replace(/^\/+|\/+$/g, '');
+    const cleanDownloadPath = downloadPath.replace(/^\/+|\/+$/g, '');
     // Regex to match files within the specific thread directory. Needs escaping.
     const escapedPath = cleanDownloadPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regexPattern = `^${escapedPath}/${threadId}/.*`;
@@ -898,130 +899,93 @@ async function directoryExists(threadId) {
 }
 
 
-async function checkForNewThreads() {
-  if (!isRunning || !isInitialized) {
-    // log("checkForNewThreads: Skipping, not running or not initialized.", "debug");
-    return;
-  }
-  if (!lastSearchParams.board || !lastSearchParams.searchTerm) {
-    log("checkForNewThreads: Skipping, board or search term missing.", "info");
-    return;
-  }
-
-  const activeThreadCount = watchedThreads.filter(t => t.active && !t.error && !t.closed).length;
-  const availableSlots = MAX_CONCURRENT_THREADS - activeThreadCount;
-
-  if (availableSlots <= 0) {
-    // log("checkForNewThreads: Skipping, no available slots.", "debug");
-    return;
-  }
-
-  //log(`checkForNewThreads: Searching for up to ${availableSlots} new threads on /${lastSearchParams.board}/ matching "${lastSearchParams.searchTerm}"`, "info");
-
-  await searchAndWatchThreads(lastSearchParams.board, lastSearchParams.searchTerm, availableSlots);
-}
-
-
-async function searchAndWatchThreads(board, searchTerm, limit = MAX_CONCURRENT_THREADS) {
-  if (!isRunning) return;
-
+async function findMatchingThreads(board, searchTerm, existingIds) {
   const catalogUrl = `https://a.4cdn.org/${board}/catalog.json`;
-  let regex;
-  try {
-      regex = new RegExp(searchTerm, 'i'); // Case-insensitive search
-  } catch (e) {
-      log(`Invalid regex pattern: "${searchTerm}". Error: ${e.message}`, "error");
-      return; // Stop if regex is invalid
-  }
-
-  const sevenDaysAgo = Date.now() / 1000 - (7 * 24 * 60 * 60); // Threads older than 7 days are usually pruned or archived
-
-  // Update last search params in storage
-  lastSearchParams.board = board;
-  lastSearchParams.searchTerm = searchTerm;
-  chrome.storage.local.set({ lastSearchParams });
+  const regex = new RegExp(searchTerm, 'i');
+  const sevenDaysAgo = Date.now() / 1000 - (7 * 24 * 60 * 60);
+  let foundThreads = [];
 
   try {
-    // --- MODIFIED: Use the new rate limiter ---
     const catalog = await scheduleRequest(() => fetchWithRetry(catalogUrl));
-    if (!Array.isArray(catalog)) {
-        throw new Error("Catalog response was not an array");
-    }
+    if (!Array.isArray(catalog)) throw new Error("Catalog response was not an array");
 
-    let potentialNewThreads = [];
     for (const page of catalog) {
-      if (!page || !Array.isArray(page.threads)) continue; // Skip invalid pages
+      if (!page || !Array.isArray(page.threads)) continue;
 
       for (const threadData of page.threads) {
-        // Basic validation of thread data
-        if (!threadData || !threadData.no || typeof threadData.no !== 'number') continue;
-
-        // Filter by time first (optimization)
-        if (threadData.time < sevenDaysAgo) {
+        if (!threadData || !threadData.no || threadData.time < sevenDaysAgo || existingIds.includes(threadData.no)) {
           continue;
         }
 
-        // Check if already watching this thread ID
-        if (watchedThreads.some(t => t.id === threadData.no)) {
-          continue; // Already watching
-        }
-
-        // Check if matches search term (subject or comment)
         const matchesSubject = threadData.sub && regex.test(threadData.sub);
         const matchesText = threadData.com && regex.test(threadData.com);
 
         if (matchesSubject || matchesText) {
-          // Check if a directory might already exist (imperfect check)
           const folderExists = await directoryExists(threadData.no);
           if (folderExists) {
             log(`Skipping potential thread ${threadData.no} - download directory seems to exist.`, "info");
             continue;
           }
 
-          // Construct thread object if it passes checks
-          const newThread = {
+          foundThreads.push({
             url: `https://a.4cdn.org/${board}/thread/${threadData.no}.json`,
-            title: threadData.sub || `Thread ${threadData.no}`, // Use subject or fallback
+            title: threadData.sub || `Thread ${threadData.no}`,
             board: board,
             id: threadData.no,
-            time: threadData.time || Math.floor(Date.now() / 1000), // Use thread time or fallback
-            active: false, // Add as inactive initially
-            downloadedCount: 0,
-            totalImages: 0, // Will be determined on first process
-            error: false,
-            closed: false, // Assume not closed initially
-            skippedImages: new Set() // Initialize skipped images Set
-          };
-          potentialNewThreads.push(newThread);
+            time: threadData.time || Math.floor(Date.now() / 1000),
+            active: false, downloadedCount: 0, totalImages: 0,
+            error: false, closed: false, skippedImages: new Set()
+          });
         }
       }
     }
-
-    // Sort potential threads by time (newest first)
-    potentialNewThreads.sort((a, b) => b.time - a.time);
-
-    // Select threads to add based on the limit provided
-    const threadsToAdd = potentialNewThreads.slice(0, limit);
-
-    if (threadsToAdd.length > 0) {
-      log(`Found ${threadsToAdd.length} new matching threads. Adding to watch list.`, "success");
-      threadsToAdd.forEach(t => {
-          t.active = true; // Activate the threads being added
-          watchedThreads.push(t);
-          log(`Added: "${t.title}" (${t.id})`, "info");
-      });
-      updateWatchedThreads(); // Save the new list
-      debouncedUpdateUI(); // Update UI
-
-      // Trigger processing for the newly added threads
-      // Let manageThreads handle the concurrency and scheduling
-      manageThreads();
-
-    } else {
-      //log(`searchAndWatchThreads: No new matching threads found for "${searchTerm}" on /${board}/.`, "info");
-    }
   } catch (error) {
     log(`Error searching catalog for /${board}/ with term "${searchTerm}": ${error.message}`, "error");
+  }
+
+  return foundThreads.sort((a, b) => b.time - a.time);
+}
+
+async function checkForNewThreads() {
+  if (watchJobs.length === 0) return;
+  
+  const activeThreadCount = watchedThreads.filter(t => t.active && !t.error && !t.closed).length;
+  let availableSlots = MAX_CONCURRENT_THREADS - activeThreadCount;
+
+  if (availableSlots <= 0) return;
+
+  log(`Checking for new threads from ${watchJobs.length} watch jobs. Available slots: ${availableSlots}`, "debug");
+
+  const shuffledJobs = [...watchJobs].sort(() => 0.5 - Math.random());
+  let newThreadsFound = false;
+
+  for (const job of shuffledJobs) {
+    if (availableSlots <= 0) break;
+
+    //log(`Executing watch job: /${job.board}/ - "${job.searchTerm}"`, "debug");
+    const existingIds = watchedThreads.map(t => t.id);
+    const foundThreads = await findMatchingThreads(job.board, job.searchTerm, existingIds);
+
+    if (foundThreads.length > 0) {
+      const threadsToAdd = foundThreads.slice(0, availableSlots);
+      log(`Found ${threadsToAdd.length} new matching threads from job /${job.board}/. Adding to watch list.`, "success");
+      
+      threadsToAdd.forEach(t => {
+        t.active = true;
+        watchedThreads.push(t);
+        log(`Added: "${t.title}" (${t.id})`, "info");
+      });
+      
+      availableSlots -= threadsToAdd.length;
+      newThreadsFound = true;
+    }
+  }
+
+  if (newThreadsFound) {
+    updateWatchedThreads();
+    manageThreads(); // Trigger processing for newly added threads
+  } else {
+    debouncedUpdateUI(); // Still update UI to show latest timer
   }
 }
 
@@ -1033,10 +997,6 @@ async function addThreadById(board, threadIdStr) {
     }
 
     log(`Attempting to add thread ${threadId} from board /${board}/ by ID...`, "info");
-
-    // Update last used board
-    lastSearchParams.board = board;
-    chrome.storage.local.set({ lastSearchParams });
 
     // Check if already watching
     if (watchedThreads.some(t => t.id === threadId)) {
@@ -1110,44 +1070,47 @@ async function addThreadById(board, threadIdStr) {
 }
 
 
-function startScraping(board, searchTerm, threadId, tabId, downloadPath) {
-    //log(`Start command received: Board=${board}, Term=${searchTerm || 'N/A'}, ID=${threadId || 'N/A'}, Path=${downloadPath}`, "info");
-    isRunning = true; // Set global running state
-    openerTabId = tabId; // Track opener tab (though not heavily used currently)
-    lastSearchParams.downloadPath = downloadPath || "4chan_downloads"; // Set download path
+async function addWatchJob(board, searchTerm) {
+  if (!board || !searchTerm) {
+    log("addWatchJob failed: Board and search term are required.", "error");
+    return false;
+  }
+  try {
+    new RegExp(searchTerm, 'i');
+  } catch (e) {
+    log(`addWatchJob failed: Invalid regex pattern "${searchTerm}".`, "error");
+    return false;
+  }
 
-    chrome.storage.local.set({ isRunning, lastSearchParams }); // Persist state
+  const jobExists = watchJobs.some(j => j.board.toLowerCase() === board.toLowerCase() && j.searchTerm === searchTerm);
+  if (jobExists) {
+    log(`Watch job for /${board}/ with term "${searchTerm}" already exists.`, "warning");
+    return false;
+  }
 
-    let startPromise;
-    if (threadId) {
-        startPromise = addThreadById(board, threadId);
-    } else if (searchTerm) {
-        // Determine initial limit based on current active threads
-        const activeCount = watchedThreads.filter(t => t.active && !t.error && !t.closed).length;
-        const limit = Math.max(0, MAX_CONCURRENT_THREADS - activeCount);
-        startPromise = searchAndWatchThreads(board, searchTerm, limit);
-    } else {
-        log("Start command failed: Neither search term nor thread ID provided.", "error");
-        isRunning = watchedThreads.some(t => t.active && !t.closed); // Re-evaluate isRunning
-        chrome.storage.local.set({ isRunning });
-        debouncedUpdateUI();
-        return; // Nothing to start
-    }
+  const newJob = {
+    id: `job_${Date.now()}`,
+    board: board,
+    searchTerm: searchTerm
+  };
 
-    startPromise.then(() => {
-        //log("Initial thread add/search complete.", "info");
-        // Ensure isRunning reflects actual state after adding/searching
-        isRunning = watchedThreads.some(t => t.active && !t.closed);
-        chrome.storage.local.set({ isRunning });
-        debouncedUpdateUI();
-    }).catch(error => {
-        log(`Error during initial start operation: ${error.message}`, "error");
-        isRunning = watchedThreads.some(t => t.active && !t.closed); // Re-evaluate isRunning
-        chrome.storage.local.set({ isRunning });
-        debouncedUpdateUI();
-    });
+  watchJobs.push(newJob);
+  chrome.storage.local.set({ watchJobs: watchJobs });
+  log(`Added new watch job: /${board}/ - "${searchTerm}"`, "success");
+
+  await checkForNewThreads();
+  return true;
 }
 
+function removeWatchJob(jobId) {
+  const initialLength = watchJobs.length;
+  watchJobs = watchJobs.filter(j => j.id !== jobId);
+  if (watchJobs.length < initialLength) {
+    chrome.storage.local.set({ watchJobs: watchJobs });
+    log(`Removed watch job with ID ${jobId}.`, "info");
+    debouncedUpdateUI();
+  }
+}
 
 function stopScraping() {
   log("Stop command received: Pausing all active threads...", "info");
@@ -1599,6 +1562,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 totalImages: thread.totalImages || 0
               })),
               trackedDownloads: downloadedImages.size,
+              watchJobs: watchJobs, // --- NEW: Send watch jobs to UI
               bannedUsernames: Array.from(bannedUsernames), // Include banned list
               nextManageThreads: nextTime, // Send the correctly retrieved time
               maxConcurrentThreads: MAX_CONCURRENT_THREADS // --- NEW: Send current value
@@ -1617,6 +1581,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 totalImages: thread.totalImages || 0
               })),
               trackedDownloads: downloadedImages.size,
+              watchJobs: watchJobs, // --- NEW: Send watch jobs to UI
               bannedUsernames: Array.from(bannedUsernames), // Still send current list
               nextManageThreads: null, // Indicate error by sending null
               maxConcurrentThreads: MAX_CONCURRENT_THREADS, // --- NEW: Send current value
@@ -1629,31 +1594,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   // --- Other message handlers ---
   else if (messageType === "start") {
-    if (!isInitialized) {
-      log("Start request received before initialization, delaying...", "info");
-      const initCheckInterval = setInterval(() => {
-          if (isInitialized) {
-              clearInterval(initCheckInterval);
-              log("Initialization complete, proceeding with start request.", "info");
-              startScraping(message.board, message.searchTerm, message.threadId, sender.tab?.id, message.downloadPath);
-              sendResponse({ success: true });
-          }
-      }, 200);
-       // Timeout for waiting
-       setTimeout(() => {
-           if (!isInitialized) {
-               clearInterval(initCheckInterval);
-               log("Initialization timeout waiting for start request.", "error");
-               sendResponse({ success: false, error: "Initialization timeout" });
-           }
-       }, 5000);
-       // Indicate async response because of potential delay
-       return true;
+    // This message is now split. Adding a thread by ID remains, but search is a "watch job".
+    if (message.threadId) {
+      addThreadById(message.board, message.threadId).then(() => {
+        sendResponse({ success: true });
+      });
+      return true; // Async
+    } else if (message.searchTerm) {
+      // This is now "addWatchJob"
+      addWatchJob(message.board, message.searchTerm).then(success => {
+        sendResponse({ success });
+      });
+      return true; // Async
     } else {
-      // Initialized, process immediately
-      startScraping(message.board, message.searchTerm, message.threadId, sender.tab?.id, message.downloadPath);
-      sendResponse({ success: true });
-      // No need to return true here as it's synchronous now
+        log("Start request missing threadId or searchTerm.", "error");
+        sendResponse({ success: false, error: "Missing threadId or searchTerm" });
     }
   } else if (messageType === "stop") {
     stopScraping();
@@ -1685,9 +1640,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (messageType === "forgetThreadDownloads") {
     const success = forgetThreadDownloads(message.threadId);
     sendResponse({ success });
-  } else if (messageType === "getLastSearchParams") {
-    // This is synchronous
-    sendResponse(lastSearchParams);
+  } else if (messageType === "getSavedPath") { // --- MODIFIED
+    sendResponse({ downloadPath: downloadPath });
+  } else if (messageType === "updateDownloadPath") { // --- NEW
+    if (message.path) {
+        downloadPath = message.path;
+        chrome.storage.local.set({ downloadPath: downloadPath });
+        log(`Download path updated to: ${downloadPath}`, "info");
+        sendResponse({ success: true });
+    } else {
+        sendResponse({ success: false, error: "No path provided" });
+    }
   } else if (messageType === "getBannedUsernames") { // New handler
       sendResponse({ success: true, bannedUsernames: Array.from(bannedUsernames) });
   } else if (messageType === "addBannedUsername") { // New handler
@@ -1699,6 +1662,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (messageType === "clearBannedUsernames") { // New handler
       const success = clearBannedUsernames();
       sendResponse({ success });
+  } else if (messageType === "addWatchJob") { // --- NEW
+      addWatchJob(message.board, message.searchTerm).then(success => sendResponse({ success }));
+      return true; // Is async
+  } else if (messageType === "removeWatchJob") { // --- NEW
+      removeWatchJob(message.id);
+      sendResponse({ success: true });
   } else if (messageType === "syncThreadCounts") {
      // This operation itself might take time but sendResponse is called synchronously at the end
      //log("Manual sync requested. Rebuilding state for all threads...", "info");
@@ -1767,7 +1736,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // Determine if we need to return true based on which message types *might* be async
   // 'getStatus', 'start' (if delayed), and 'resumeAll' are the async ones.
-  return (messageType === "getStatus" || (messageType === "start" && !isInitialized) || messageType === "resumeAll");
+  return ["getStatus", "start", "resumeAll", "addWatchJob"].includes(messageType);
 });
 
 
@@ -1821,11 +1790,13 @@ async function initializeState(result) {
         log(`Initialization sync corrected counts for ${totalCorrectedCount} threads.`, "info");
     }
 
-    // Load last search parameters
-    lastSearchParams = result.lastSearchParams || { board: '', searchTerm: '', downloadPath: '4chan_downloads' };
-    // Sanitize download path
-    lastSearchParams.downloadPath = (lastSearchParams.downloadPath || '4chan_downloads').replace(/^\/+|\/+$/g, '');
-
+    // --- NEW: Load watch jobs and download path ---
+    watchJobs = result.watchJobs || [];
+    downloadPath = (result.downloadPath || '4chan_downloads').replace(/^\/+|\/+$/g, '');
+    if (result.lastSearchParams) { // --- MIGRATION: For users updating the extension
+        log("Migrating legacy 'lastSearchParams' to new 'watchJobs' system.", "info");
+        chrome.storage.local.remove('lastSearchParams');
+    }
 
     // Load downloaded images history
     if (result.downloadedImages && Array.isArray(result.downloadedImages)) {
@@ -1881,11 +1852,11 @@ async function initializeState(result) {
     isInitialized = true; // Mark as initialized
 
     // Perform initial cleanup of old downloads
-    cleanupOldDownloads();
+    cleanupOldDownloads(); 
 }
 
 // --- MODIFIED: Load state when the service worker starts, including new setting ---
-chrome.storage.local.get(["watchedThreads", "lastSearchParams", "downloadedImages", "isRunning", "bannedUsernames", "maxConcurrentThreads"], async (result) => {
+chrome.storage.local.get(["watchedThreads", "watchJobs", "downloadPath", "lastSearchParams", "downloadedImages", "isRunning", "bannedUsernames", "maxConcurrentThreads"], async (result) => {
     await initializeState(result);
     // After state is loaded and sanitized:
     if (isRunning) {
