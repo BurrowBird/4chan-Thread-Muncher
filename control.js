@@ -5,6 +5,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const boardInput = document.getElementById("board");
   const downloadPathInput = document.getElementById("downloadPath");
   const banUsernameInput = document.getElementById("banUsernameInput");
+  const maxThreadsInput = document.getElementById("maxThreadsInput"); // --- NEW
 
   // Button Elements
   const clearBanListBtn = document.getElementById("clearBanListBtn");
@@ -29,6 +30,99 @@ document.addEventListener("DOMContentLoaded", () => {
   let refreshInterval = null;
   let darkMode = localStorage.getItem("darkMode") === null ? true : localStorage.getItem("darkMode") === "true";
   let currentWindowId = null;
+
+  // --- History Dropdown Feature ---
+  const BOARD_HISTORY_KEY = 'boardInputHistory';
+  const SEARCH_TERM_HISTORY_KEY = 'searchTermInputHistory';
+  const MAX_HISTORY_SIZE = 20;
+
+  const boardHistoryDropdown = document.getElementById('boardHistoryDropdown');
+  const searchTermHistoryDropdown = document.getElementById('searchTermHistoryDropdown');
+  const boardContainer = boardInput.parentElement;
+  const searchTermContainer = searchTermInput.parentElement;
+
+  const deleteHistoryItem = (storageKey, value) => {
+    chrome.storage.local.get([storageKey], (result) => {
+      const history = result[storageKey] || [];
+      const newHistory = history.filter(item => item !== value);
+      chrome.storage.local.set({ [storageKey]: newHistory });
+    });
+  };
+
+  const renderHistoryItems = (input, dropdown, storageKey, history) => {
+    dropdown.innerHTML = '';
+    if (!history || history.length === 0) {
+      const emptyItem = document.createElement('div');
+      emptyItem.className = 'history-item';
+      emptyItem.style.cssText = 'justify-content: center; cursor: default; opacity: 0.7;';
+      emptyItem.textContent = 'No history';
+      dropdown.appendChild(emptyItem);
+      return;
+    }
+
+    history.forEach(itemText => {
+      const item = document.createElement('div');
+      item.className = 'history-item';
+
+      const text = document.createElement('span');
+      text.className = 'history-item-text';
+      text.textContent = itemText;
+      text.title = itemText;
+      item.appendChild(text);
+
+      const del = document.createElement('span');
+      del.className = 'history-item-delete';
+      del.innerHTML = '&times;';
+      del.title = 'Remove from history';
+      item.appendChild(del);
+
+      item.addEventListener('click', () => {
+        input.value = itemText;
+        dropdown.style.display = 'none';
+      });
+
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteHistoryItem(storageKey, itemText);
+      });
+
+      dropdown.appendChild(item);
+    });
+  };
+
+  const setupHistoryDropdown = (input, dropdown, container, storageKey) => {
+    const arrow = container.querySelector('.history-arrow');
+
+    chrome.storage.local.get([storageKey], (result) => {
+      renderHistoryItems(input, dropdown, storageKey, result[storageKey] || []);
+    });
+
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && changes[storageKey]) {
+        renderHistoryItems(input, dropdown, storageKey, changes[storageKey].newValue || []);
+      }
+    });
+
+    arrow.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isVisible = dropdown.style.display === 'block';
+      document.querySelectorAll('.history-dropdown').forEach(d => d.style.display = 'none');
+      if (!isVisible) {
+        dropdown.style.display = 'block';
+      }
+    });
+  };
+
+  setupHistoryDropdown(boardInput, boardHistoryDropdown, boardContainer, BOARD_HISTORY_KEY);
+  setupHistoryDropdown(searchTermInput, searchTermHistoryDropdown, searchTermContainer, SEARCH_TERM_HISTORY_KEY);
+
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.history-dropdown').forEach(d => {
+      d.style.display = 'none';
+    });
+  });
+  // --- End of History Dropdown Feature ---
+
 
   // --- Initialization ---
 
@@ -342,6 +436,7 @@ document.addEventListener("DOMContentLoaded", () => {
       forgetAllBtn.disabled = disabled;
       syncCountsBtn.disabled = disabled;
       addBanBtn.disabled = disabled;
+      maxThreadsInput.disabled = disabled; // --- NEW
       threadsDiv.querySelectorAll('.thread-buttons button').forEach(btn => btn.disabled = disabled);
       bannedUsersList.querySelectorAll('button').forEach(btn => btn.disabled = disabled);
   }
@@ -367,8 +462,12 @@ document.addEventListener("DOMContentLoaded", () => {
       resumeAllBtn.disabled = pausedThreads.length === 0;
 
       const activeCount = activeThreads.length;
-      const maxCount = 5;
+      // --- MODIFIED: Use maxConcurrentThreads from status for the display ---
+      const maxCount = status.maxConcurrentThreads || 5; 
       updateTimer(status.nextManageThreads, activeCount, maxCount);
+      
+      // --- NEW: Update the max threads input field ---
+      maxThreadsInput.value = maxCount;
 
       renderThreads(status.watchedThreads);
       renderBannedUsernames(status.bannedUsernames || []);
@@ -408,6 +507,26 @@ document.addEventListener("DOMContentLoaded", () => {
           threadIdInput.focus();
           return;
       }
+
+      // --- Save to History ---
+      const saveToHistory = (storageKey, value) => {
+          if (!value || !value.trim()) return;
+          const trimmedValue = value.trim();
+
+          chrome.storage.local.get([storageKey], (result) => {
+              let history = result[storageKey] || [];
+              history = history.filter(item => item !== trimmedValue); // Remove if exists
+              history.unshift(trimmedValue); // Add to front
+              history = history.slice(0, MAX_HISTORY_SIZE); // Enforce size limit
+              chrome.storage.local.set({ [storageKey]: history });
+          });
+      };
+      
+      saveToHistory(BOARD_HISTORY_KEY, board);
+      if (searchTerm) {
+          saveToHistory(SEARCH_TERM_HISTORY_KEY, searchTerm);
+      }
+      // --- End Save to History ---
 
       startBtn.disabled = true;
       startBtn.textContent = "Starting...";
@@ -480,6 +599,28 @@ document.addEventListener("DOMContentLoaded", () => {
           addBanBtn.disabled = false;
       });
   });
+  
+  // --- NEW: Event listener for the max threads input ---
+  maxThreadsInput.addEventListener("change", () => {
+      const newValue = parseInt(maxThreadsInput.value, 10);
+      if (!isNaN(newValue) && newValue >= 1 && newValue <= 20) {
+          maxThreadsInput.disabled = true; // Disable while sending
+          chrome.runtime.sendMessage({ type: "updateMaxThreads", value: newValue }, (response) => {
+              if (response?.success) {
+                  appendLog(`Set max concurrent threads to ${newValue}.`, "success");
+              } else {
+                  appendLog(`Failed to set max threads: ${response?.error || 'Unknown error'}.`, "error");
+              }
+              // Refresh the entire status to ensure UI is consistent
+              requestStatusUpdate(); 
+          });
+      } else {
+          appendLog("Invalid max threads value. Must be a number between 1 and 20.", "error");
+          // Re-fetch status to reset the input to its last valid value
+          requestStatusUpdate(); 
+      }
+  });
+
 
   banUsernameInput.addEventListener('keypress', function (e) {
       if (e.key === 'Enter') {

@@ -117,17 +117,26 @@
       cursor: not-allowed;
     }
 
-    input[type="text"] {
-      margin: 5px 0; /* Top/bottom margin only */
+    input[type="text"], input[type="number"] {
+      margin: 0;
       padding: 8px;
-      flex-grow: 1; /* Allow inputs to grow */
       background-color: var(--input-bg);
       color: var(--text-color);
       border: 1px solid var(--border-color);
       border-radius: 4px;
       font-size: 14px;
-      min-width: 100px; /* Prevent inputs from becoming too small */
     }
+    /* --- NEW: Style for number input --- */
+    input[type="number"] {
+        width: 60px;
+        -moz-appearance: textfield; /* Firefox */
+    }
+    input::-webkit-outer-spin-button,
+    input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
 
     .input-group {
         display: flex;
@@ -143,6 +152,90 @@
         font-weight: bold;
         white-space: nowrap;
     }
+
+    .input-group > input[type="text"],
+    .input-group > .history-input-container {
+        flex-grow: 1;
+        min-width: 100px;
+    }
+
+    /* --- History Dropdown Styles --- */
+    .history-input-container {
+        position: relative;
+        display: flex;
+    }
+    .history-input-container > input[type="text"] {
+        width: 100%;
+        padding-right: 25px; /* Space for the arrow */
+    }
+    .history-arrow {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        cursor: pointer;
+        user-select: none;
+        font-size: 10px;
+        opacity: 0.7;
+        color: var(--text-color);
+        transition: opacity 0.2s;
+    }
+    .history-arrow:hover {
+        opacity: 1;
+    }
+    .history-dropdown {
+        display: none;
+        position: absolute;
+        top: 100%; /* Position below the input */
+        left: 0;
+        right: 0;
+        background-color: var(--input-bg);
+        border: 1px solid var(--border-color);
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+        z-index: 1000;
+        max-height: 250px;
+        overflow-y: auto;
+        box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+    }
+    body.dark-mode .history-dropdown {
+         box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+     }
+    .history-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 10px;
+        cursor: pointer;
+        font-size: 13px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .history-item:last-child {
+        border-bottom: none;
+    }
+    .history-item:hover {
+        background-color: var(--button-hover);
+    }
+    .history-item-text {
+        flex-grow: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        padding-right: 10px;
+    }
+    .history-item-delete {
+        font-family: 'Segoe UI Symbol', sans-serif;
+        font-weight: bold;
+        color: var(--error-color);
+        padding: 0 4px;
+        border-radius: 50%;
+        transition: background-color 0.2s, color 0.2s;
+    }
+    .history-item-delete:hover {
+        background-color: var(--error-color);
+        color: var(--bg-color);
+    }
+    /* --- End History Dropdown Styles --- */
 
     #thread-count-container { /* Renamed from timer */
       font-size: 14px;
@@ -243,6 +336,19 @@
       gap: 10px; /* Space between items in the groups */
        flex-wrap: wrap; /* Allow inner wrapping */
     }
+     
+    /* --- NEW: Style for the new control group --- */
+    .thread-control-group {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        margin-left: 10px;
+    }
+    .thread-control-group label {
+        font-size: 13px;
+        white-space: nowrap;
+    }
+
 
     #modeToggle {
         padding: 5px 10px; /* Smaller padding */
@@ -369,8 +475,16 @@
 
   <div class="input-group">
       <input type="text" id="downloadPath" placeholder="Download Path (e.g., 4chan_dl)">
-      <input type="text" id="board" placeholder="Board (e.g., wg)">
-      <input type="text" id="searchTerm" placeholder="Search Term (regex)">
+      <div class="history-input-container">
+        <input type="text" id="board" placeholder="Board (e.g., wg)">
+        <span class="history-arrow">▼</span>
+        <div class="history-dropdown" id="boardHistoryDropdown"></div>
+      </div>
+      <div class="history-input-container">
+        <input type="text" id="searchTerm" placeholder="Search Term (regex)">
+        <span class="history-arrow">▼</span>
+        <div class="history-dropdown" id="searchTermHistoryDropdown"></div>
+      </div>
       <input type="text" id="threadId" placeholder="Thread ID (optional)">
   </div>
 
@@ -379,6 +493,10 @@
         <button id="startBtn">Add/Search Threads</button>
         <button id="pauseAllBtn">Pause All</button>
         <button id="resumeAllBtn">Resume All</button>
+        <div class="thread-control-group">
+            <label for="maxThreadsInput">Max Threads:</label>
+            <input type="number" id="maxThreadsInput" min="1" max="20" title="Max concurrent scraping threads (1-20)">
+        </div>
         <div id="thread-count-container">
             <span id="thread-count">0 / 0 Active Threads</span>
             <span id="countdown-timer">Next: ---</span>
@@ -392,11 +510,9 @@
 
 <div id="threads-container">
     <div id="threads">
-        <!-- Thread elements will be injected here -->
-    </div>
+        </div>
 </div>
 
-<!-- Ban Management Section -->
 <div id="ban-management">
     <h3 id="ban-toggle">Banned Usernames <span class="toggle-icon"></span></h3>
     <div id="ban-content">
@@ -407,18 +523,15 @@
         </div>
         <div class="input-group" style="justify-content: space-between; align-items: flex-start;">
             <div id="banned-users-list">
-                <!-- Banned usernames will be injected here -->
-            </div>
+                </div>
             <button id="clearBanListBtn" class="danger-button">Clear List</button>
         </div>
     </div>
 </div>
 
-<!-- Log Container Section -->
 <div id="log-container">
     <div id="log">
-        <!-- Log messages will be injected here -->
-    </div>
+        </div>
 </div>
 
   <script src="control.js"></script>
