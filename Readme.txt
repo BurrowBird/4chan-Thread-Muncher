@@ -8,7 +8,7 @@ If the constant download popups are annoying, you can disable chrome's download 
 
 ----
 
-Muncher is 99 % vibe coded, using free versions of Grok, Claude and Gemini.
+Muncher is 99 % AI vibe coded, using free versions of Grok, Claude and Gemini.
 
 Muncher tries to prevent downloading duplicates.
 If you do want to redownload the same thread twice, use the Forget buttons.
@@ -51,5 +51,6 @@ In background.js, you might want to adjust these values:
     Delay between downloading images in ms.
     [Update] No longer the main controller of delay, instead used when a request fails and needs to be retried.
 
+-----
 
-
+#4chan #Extension #Chrome #AI #Vibe_Coding
