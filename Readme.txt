@@ -36,7 +36,7 @@ In background.js, you might want to adjust these values (at risk of provoking 4c
 ✱ const RATE_LIMIT_MS = 1500;
     Default value is 1.5 seconds.
     Delay between downloading images in ms.
-    [Update] No longer the main controller of delay, instead used for when a request fails and needs to be retried.
+    [Update] No longer the main controller of delay, instead used when a request fails and needs to be retried.
 
 ✱ const STUCK_TIMER = 5 * 60 * 1000;
     Default value is 5 minutes.    
@@ -45,4 +45,5 @@ In background.js, you might want to adjust these values (at risk of provoking 4c
 ✱ const MANAGE_THREADS_INTERVAL = 1;
     Default value is 1 minute.
     Time between updating threads and performing checks.
+
 
