@@ -26,9 +26,13 @@ KNOWN ISSUES:
 
 CHANGELOG:
 
+2025-08-08c
+・ Fixed: When adding a new Watch Job, downloads wait for the Next Update timer to run out.
+・ Fixed: Next Update timer doesn't show up until the window is manually refocused.
+
 2025-08-08a
 ・ Improved rendering and fixed weird flashing buttons.
-・ New issue: Next Update timer doesn't show until the window is manually refocused.
+・ New issue: Next Update timer doesn't show up until the window is manually refocused.
 
 2025-08-07b
 ・ Added simultaneous watching of multiple searches ("board + regex search string").
@@ -61,6 +65,7 @@ In background.js, you might want to adjust these values:
 -----
 
 #4chan #Extension #Chrome #AI #Vibe_Coding
+
 
 
 
