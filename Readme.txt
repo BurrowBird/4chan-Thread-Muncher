@@ -20,6 +20,10 @@ Multiple searches can be monitored at the same time.
 
 CHANGELOG:
 
+2025-08-08a
+・ Improved rendering and fixed weird flashing buttons.
+・ New issue: Next Update timer doesn't show until the window is manually refocused.
+
 2025-08-07b
 ・ Added simultaneous watching of multiple searches of "board + regex search string".
 
@@ -54,4 +58,5 @@ In background.js, you might want to adjust these values:
 -----
 
 #4chan #Extension #Chrome #AI #Vibe_Coding
+
 
