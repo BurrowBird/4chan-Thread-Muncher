@@ -34,7 +34,7 @@ CHANGELOG:
 ・ Added simultaneous watching of multiple searches ("board + regex search string").
 
 2025-08-07a
-・ Added history dropdown menu for convenience.
+・ Added history dropdown menus for convenience.
 ・ Added a UI element to change max concurrent threads.
 ・ Edited download delays to adapt to max concurrent threads.
 
@@ -61,6 +61,7 @@ In background.js, you might want to adjust these values:
 -----
 
 #4chan #Extension #Chrome #AI #Vibe_Coding
+
 
 
 
