@@ -520,13 +520,18 @@
       <input type="text" id="threadId" placeholder="Thread ID (optional)">
   </div>
 
-  <div class="action-buttons">
+<div class="action-buttons">
     <div class="action-buttons-left">
         <button id="addWatchJobBtn">Add Watch Job</button>
         <button id="addThreadByIdBtn">Add Thread by ID</button>
         <button id="pauseAllBtn">Pause All</button>
         <button id="resumeAllBtn">Resume All</button>
+        <button id="checkAllBtn">Check All</button>
+        <button id="syncCountsBtn">Sync Counts</button>
+        <button id="forgetAllBtn" class="danger-button">Forget All</button>
+        <button id="removeAllBtn" class="danger-button">Remove All</button>
     </div>
+
     <div class="action-buttons-right">
         <div class="thread-control-group">
             <label for="maxThreadsInput">Max Threads:</label>
@@ -536,8 +541,6 @@
             <span id="thread-count">0 / 0 Active Threads</span>
             <span id="countdown-timer">Next: ---</span>
         </div>
-        <button id="syncCountsBtn">Sync Counts</button>
-        <button id="forgetAllBtn" class="danger-button">Forget All History</button>
     </div>
 </div>
 
