@@ -395,33 +395,31 @@ function updateUI() {
   if (windowId) {
     chrome.windows.get(windowId, {}, (win) => {
       if (chrome.runtime.lastError || !win) {
-        // Window closed or doesn't exist, no need to warn constantly
-        // log(`Control window ${windowId} not found for UI update.`, "info");
-        // windowId = null; // Consider if resetting windowId here is desired. Maybe not, it might reappear.
         return;
       }
-      // Send status to the control window
-      chrome.runtime.sendMessage({
-        type: "updateStatus",
-        isRunning: watchedThreads.some(t => t.active && !t.closed), // isRunning based on actual active threads
-        watchedThreads: watchedThreads.map(thread => ({
-          ...thread,
-          skippedImages: Array.from(thread.skippedImages || new Set()), // Convert Set to array for serialization
-          downloadedCount: thread.downloadedCount || 0,
-          totalImages: thread.totalImages || 0
-        })),
-        trackedDownloads: downloadedImages.size,
-        watchJobs: watchJobs, // --- NEW: Send watch jobs to UI
-        bannedUsernames: Array.from(bannedUsernames), // Send banned list
-        nextManageThreads: chrome.alarms.get("manageThreads")?.scheduledTime || null, // Get next alarm time
-        maxConcurrentThreads: MAX_CONCURRENT_THREADS // --- NEW: Send current value to UI
-      }, () => {
-          if (chrome.runtime.lastError) {
-              // Suppress common errors like "Receiving end does not exist" if window closed between get and send
-              if (!chrome.runtime.lastError.message.includes("Receiving end does not exist")) {
-                 log(`UI update message failed: ${chrome.runtime.lastError.message}`, "warning");
-              }
-          }
+      // Get alarm asynchronously to ensure the next scheduled time is accurate.
+      chrome.alarms.get("manageThreads", (alarm) => {
+        const nextTime = alarm?.scheduledTime || null;
+        // Send status to the control window
+        chrome.runtime.sendMessage({
+          type: "updateStatus",
+          isRunning: watchedThreads.some(t => t.active && !t.closed),
+          watchedThreads: watchedThreads.map(thread => ({
+            ...thread,
+            skippedImages: Array.from(thread.skippedImages || new Set()),
+            downloadedCount: thread.downloadedCount || 0,
+            totalImages: thread.totalImages || 0
+          })),
+          trackedDownloads: downloadedImages.size,
+          watchJobs: watchJobs,
+          bannedUsernames: Array.from(bannedUsernames),
+          nextManageThreads: nextTime, // Send the correctly retrieved time
+          maxConcurrentThreads: MAX_CONCURRENT_THREADS
+        }, () => {
+            if (chrome.runtime.lastError && !chrome.runtime.lastError.message.includes("Receiving end does not exist")) {
+               log(`UI update message failed: ${chrome.runtime.lastError.message}`, "warning");
+            }
+        });
       });
     });
   }
@@ -720,7 +718,7 @@ async function manageThreads() {
   chrome.storage.local.set({ isRunning }); // Persist running state
 
   if (!isRunning && watchedThreads.length > 0) {
-      log("manageThreads: All watched threads are now inactive, paused, closed, or errored. Setting isRunning to false.", "info");
+      log("manageThreads: All watched threads are now inactive, paused, closed, or errored.", "info");
   }
 
   debouncedUpdateUI(); // Final UI update after management cycle
@@ -1097,7 +1095,8 @@ async function addWatchJob(board, searchTerm) {
   chrome.storage.local.set({ watchJobs: watchJobs });
   log(`Added new watch job: /${board}/ - "${searchTerm}"`, "success");
 
-  await checkForNewThreads();
+  // Trigger the main management loop, which will check for new threads if a slot is open.
+  await manageThreads();
   return true;
 }
 
@@ -1675,6 +1674,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ success: true });
   } else if (messageType === "setWindowId") {
     windowId = message.windowId;
+    chrome.storage.session.set({ controlWindowId: message.windowId });
     log(`Control window ID set to ${windowId}`, "info");
     sendResponse({ success: true });
      // Trigger an update for the newly identified window
@@ -1922,15 +1922,18 @@ chrome.storage.local.get(["watchedThreads", "watchJobs", "downloadPath", "lastSe
 
 // --- Window Close Listener ---
 chrome.windows.onRemoved.addListener((closedWindowId) => {
-    // Check if the window that closed is the control window we know about
-    if (closedWindowId === windowId) {
-        log(`Control window ${closedWindowId} closed. Pausing all threads.`, "info");
-        // Call the existing function that pauses everything
-        stopScraping();
-        // Reset the windowId since it's no longer valid
-        windowId = null;
-        log(`Reset windowId to null.`, "debug"); // Optional debug log
-    }
+    // Use session storage as the source of truth for the control window ID,
+    // as the in-memory `windowId` variable can be lost if the service worker goes inactive.
+    chrome.storage.session.get('controlWindowId', (result) => {
+        if (result.controlWindowId && result.controlWindowId === closedWindowId) {
+            log(`Control window ${closedWindowId} closed. Pausing all threads.`, "info");
+            stopScraping();
+            // Reset the ID in both the in-memory variable and session storage.
+            windowId = null;
+            chrome.storage.session.remove('controlWindowId');
+            log(`Reset windowId to null.`, "debug");
+        }
+    });
 });
 
 // Keep-alive mechanism (less critical with Manifest V3 event-driven model, but can help)

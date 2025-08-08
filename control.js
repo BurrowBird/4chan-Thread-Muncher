@@ -55,6 +55,30 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
 
+/**
+   * Adds a new value to a specified history list in chrome.storage.
+   * @param {string} storageKey The key for the history array in storage.
+   * @param {string} value The value to add to the history.
+   */
+  const addToHistory = (storageKey, value) => {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) return; // Do not save empty values
+
+    chrome.storage.local.get([storageKey], (result) => {
+      let history = result[storageKey] || [];
+      // Remove the value if it already exists to move it to the top
+      history = history.filter(item => item !== trimmedValue);
+      // Add the new value to the beginning of the array
+      history.unshift(trimmedValue);
+      // Trim the history to the maximum allowed size
+      if (history.length > MAX_HISTORY_SIZE) {
+        history = history.slice(0, MAX_HISTORY_SIZE);
+      }
+      // Save the updated history back to storage
+      chrome.storage.local.set({ [storageKey]: history });
+    });
+  };
+  
   const renderHistoryItems = (input, dropdown, storageKey, history) => {
     dropdown.innerHTML = '';
     if (!history || history.length === 0) {
@@ -145,15 +169,19 @@ document.addEventListener("DOMContentLoaded", () => {
   chrome.windows.getCurrent((window) => {
     if (window && window.id) {
         currentWindowId = window.id;
+        // Send the window ID and wait for the callback before requesting status
         chrome.runtime.sendMessage({ type: "setWindowId", windowId: window.id }, () => {
             if (chrome.runtime.lastError) {
                 console.error("Failed to set window ID:", chrome.runtime.lastError.message);
+                appendLog("Failed to connect to the background script. Please try reloading.", "error");
             } else {
+                // Now that the background script has confirmed our ID, request the initial status.
                 requestStatusUpdate();
             }
         });
     } else {
         console.error("Could not get current window ID.");
+        appendLog("Could not identify this window. Some features may not work.", "error");
     }
   });
 
@@ -503,28 +531,33 @@ document.addEventListener("DOMContentLoaded", () => {
   window.addEventListener('focus', requestStatusUpdate);
 
   // Other listeners (addWatchJobBtn, etc.) remain the same
-  addWatchJobBtn.addEventListener("click", () => {
+	addWatchJobBtn.addEventListener("click", () => {
       const searchTerm = searchTermInput.value.trim();
       const board = boardInput.value.trim();
       if (!board || !searchTerm) {
           appendLog("Board and Search Term are required.", "error");
           return;
       }
-      addWatchJobBtn.disabled = true;
+	  addToHistory(BOARD_HISTORY_KEY, board);
+      addToHistory(SEARCH_TERM_HISTORY_KEY, searchTerm);
+	  addWatchJobBtn.disabled = true;
       chrome.runtime.sendMessage({ type: "addWatchJob", board, searchTerm }, (response) => {
-          if (!response?.success) appendLog(`Failed to add watch job.`, "error");
+          if (!response?.success) {
+              appendLog(`Failed to add watch job.`, "error");
+          } 
           addWatchJobBtn.disabled = false;
           requestStatusUpdate();
       });
   });
 
-  addThreadByIdBtn.addEventListener("click", () => {
+addThreadByIdBtn.addEventListener("click", () => {
       const threadId = threadIdInput.value.trim();
       const board = boardInput.value.trim();
       if (!board || !threadId) {
           appendLog("Board and Thread ID are required.", "error");
           return;
       }
+      addToHistory(BOARD_HISTORY_KEY, board);
       addThreadByIdBtn.disabled = true;
       chrome.runtime.sendMessage({ type: "start", board, threadId }, (response) => {
           if (response?.success) threadIdInput.value = '';
