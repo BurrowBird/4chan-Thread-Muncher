@@ -20,7 +20,7 @@ Multiple searches can be monitored at the same time.
 
 KNOWN ISSUES:
 
-・ Some UI elements still don't update until the window is manually refocused.
+・ 
 
 ----
 
@@ -65,4 +65,5 @@ In background.js, you might want to adjust these values:
 -----
 
 #4chan #Extension #Chrome #AI #Vibe_Coding
+
 
