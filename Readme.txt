@@ -1,4 +1,4 @@
-4chan-Thread-Muncher-9000 is a chrome extension that uses API (not HTML crawling) to monitor and download media from 4chan.
+4chan-Thread-Muncher is a chrome extension that uses API (not HTML crawling) to monitor and download media from 4chan.
 
 ----
 
@@ -59,6 +59,7 @@ In background.js, you might want to adjust these values:
 -----
 
 #4chan #Extension #Chrome #AI #Vibe_Coding
+
 
 
 
