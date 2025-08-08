@@ -41,9 +41,6 @@ CHANGELOG:
 2025-04-06
 ・ Added the ability to ban usernames (to skip their posts).
 
-2025-04-05
-・ All threads now pause on exit.
-
 -----
 
 In background.js, you might want to adjust these values:
@@ -64,6 +61,7 @@ In background.js, you might want to adjust these values:
 -----
 
 #4chan #Extension #Chrome #AI #Vibe_Coding
+
 
 
 
