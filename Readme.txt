@@ -18,12 +18,6 @@ Multiple searches can be monitored at the same time.
 
 ----
 
-KNOWN ISSUES:
-・ Threads are not automatically paused when closing the muncher window.
-・ Next update timer doesn't show until the window is manually refocused.
-
-----
-
 CHANGELOG:
 
 2025-08-08c
@@ -65,6 +59,7 @@ In background.js, you might want to adjust these values:
 -----
 
 #4chan #Extension #Chrome #AI #Vibe_Coding
+
 
 
 
