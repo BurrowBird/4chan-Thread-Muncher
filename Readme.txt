@@ -31,12 +31,12 @@ CHANGELOG:
 ・ New issue: Next Update timer doesn't show until the window is manually refocused.
 
 2025-08-07b
-・ Added simultaneous watching of multiple searches of "board + regex search string".
+・ Added simultaneous watching of multiple searches ("board + regex search string").
 
 2025-08-07a
 ・ Added history dropdown menu for convenience.
 ・ Added a UI element to change max concurrent threads.
-・ Edited download delays to adapt to max concurrent threads to hopefully not anger 4chan API.
+・ Edited download delays to adapt to max concurrent threads.
 
 2025-04-06
 ・ Added the ability to ban usernames (to skip their posts).
@@ -64,6 +64,7 @@ In background.js, you might want to adjust these values:
 -----
 
 #4chan #Extension #Chrome #AI #Vibe_Coding
+
 
 
 
