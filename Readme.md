@@ -11,7 +11,6 @@ You can disable chrome's download popups with another extension (search "Disable
 ・ Add threads manually by ID.  
 ・ Add threads automatically via a "watch job" (board + regex).  
 ・ Multiple watch jobs can run at the same time.  
-・ Pause, Resume, Close, Forget and Remove buttons.  
 ・ Banned usernames (to skip their posts).  
 ・ Muncher prevents downloading duplicates.  
 
@@ -65,6 +64,7 @@ In background.js, you might want to adjust these values:
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
