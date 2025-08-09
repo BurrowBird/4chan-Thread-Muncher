@@ -43,7 +43,7 @@ You can disable chrome's download popups with another extension (search "Disable
 ・ Edited download delays to adapt to max concurrent threads.  
 
 **2025-04-06**  
-・ Added the ability to ban usernames (to skip their posts).  
+・ Added the ability to ban usernames.  
 
 <br>
 
@@ -56,7 +56,7 @@ In background.js, you might want to adjust these values:
 
 ✱ **const STUCK_TIMER = 5 * 60 * 1000;**  
     Default value is 5 minutes.      
-    Time until a thread is auto-closed when inactive. (based on timing may take longer by up to MANAGE_THREADS_INTERVAL)  
+    Time until a thread is auto-closed when inactive (may take longer by up to MANAGE_THREADS_INTERVAL).  
 
 ✱ **const RATE_LIMIT_MS = 1500;**  
     Default value is 1.5 seconds.  
@@ -64,14 +64,7 @@ In background.js, you might want to adjust these values:
     [Update] No longer the main controller of delay, instead used when a request fails and needs to be retried.  
 
 ---
-
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
-
-
-
-
-
-
 
 
 
