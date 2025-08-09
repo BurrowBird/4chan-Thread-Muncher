@@ -634,14 +634,13 @@ async function manageThreads() {
 
   log(`manageThreads: Processing ${processCandidates.length} active, checking ${stuckCandidates.length} potentially stuck.`, "debug");
 
-  // --- Check potentially stuck/finished threads ---
+ // --- Check potentially stuck/finished threads ---
   const now = Date.now();
   for (const thread of [...stuckCandidates, ...finishedCandidates]) {
     const timerStartTime = threadProgressTimers.get(thread.id);
     if (timerStartTime && (now - timerStartTime >= STUCK_TIMER)) {
       log(`Thread "${thread.title}" (${thread.id}) timer expired. Checking for new images...`, "info");
       try {
-        // --- MODIFIED: Use the new rate limiter ---
         // Re-fetch thread data to see if new posts/images appeared
         const data = await scheduleRequest(() => fetchWithRetry(thread.url));
         const newImageCount = data.posts.filter(post => post.tim && post.ext).length;
@@ -709,7 +708,7 @@ async function manageThreads() {
 
   // --- Check if new threads need to be searched for ---
   const currentActiveCount = watchedThreads.filter(t => t.active && !t.closed && !t.error).length;
-  if (currentActiveCount < MAX_CONCURRENT_THREADS && (isRunning || watchJobs.length > 0)) {
+  if (currentActiveCount < MAX_CONCURRENT_THREADS && isRunning && watchJobs.length > 0) {
       await checkForNewThreads();
   }
 
