@@ -1,4 +1,4 @@
-# 4chan-Thread-Muncher
+# 4chan Thread Muncher
 A chrome extension that uses API (not HTML crawling) to monitor and download media from 4chan.  
 Muncher is 99 % AI vibe coded, using free versions of Grok, Claude and Gemini.
 
@@ -66,6 +66,7 @@ In background.js, you might want to adjust these values:
 ---
 
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
