@@ -21,11 +21,13 @@ Multiple searches can be monitored at the same time.
 KNOWN ISSUES:
 
 ・ Some UI elements still don't update until the window is manually refocused.
-・ Watch Jobs don't pause processing when muncher window is closed.
 
 ----
 
 CHANGELOG:
+
+2025-08-09
+・ Fixed:  Watch Jobs don't pause processing when muncher window is closed.
 
 2025-08-08c
 ・ Fixed: When adding a new Watch Job, downloads wait for the Next Update timer to run out.
@@ -66,6 +68,7 @@ In background.js, you might want to adjust these values:
 -----
 
 #4chan #Extension #Chrome #AI #Vibe_Coding
+
 
 
 
