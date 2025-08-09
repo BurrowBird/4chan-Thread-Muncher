@@ -13,7 +13,7 @@ You can disable chrome's download popups with another extension (search "Disable
 ・ Multiple watch jobs can run at the same time.  
 ・ Pause, Resume, Close, Forget and Remove buttons.  
 ・ Banned usernames (to skip their posts).  
-・ Muncher prevents downloading duplicates. If you do want to redownload a thread, use the Forget buttons.  
+・ Muncher prevents downloading duplicates.  
 
 <br>
 
@@ -65,6 +65,7 @@ In background.js, you might want to adjust these values:
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
