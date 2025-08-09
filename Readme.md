@@ -18,7 +18,7 @@ You can disable chrome's download popups with another extension (search "Disable
 <br>
 
 ## KNOWN ISSUES:
-・ Some UI elements still don't update until the window is manually refocused.  
+・ Some UI elements don't update until the window is manually refocused.  
 
 <br>
 
@@ -32,7 +32,7 @@ You can disable chrome's download popups with another extension (search "Disable
 
 **2025-08-08a**  
 ・ Improved rendering and fixed weird flashing buttons.  
-・ New issue: Next Update timer doesn't show up until the window is manually refocused.  
+・ New issue: Some UI elements don't update until the window is manually refocused.  
 
 **2025-08-07b**  
 ・ Added simultaneous watching of multiple searches ("board + regex search string").  
@@ -66,6 +66,7 @@ In background.js, you might want to adjust these values:
 ---
 
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
