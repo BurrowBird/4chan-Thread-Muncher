@@ -9,7 +9,7 @@ You can disable chrome's download popups with another extension (search "Disable
 
 ## FEATURES: 
 ・ Add threads manually by ID.  
-・ Add threads automatically via a "watch job" (board + regex search string).  
+・ Add threads automatically via a "watch job" (board + regex).  
 ・ Multiple watch jobs can run at the same time.  
 ・ Pause, Resume, Close, Forget and Remove buttons.  
 ・ Banned usernames (to skip their posts).  
@@ -35,7 +35,7 @@ You can disable chrome's download popups with another extension (search "Disable
 ・ New issue: Some UI elements don't update until the window is manually refocused.  
 
 **2025-08-07b**  
-・ Added simultaneous watching of multiple searches ("board + regex search string").  
+・ Added simultaneous watching of multiple searches ("board + regex").  
 
 **2025-08-07a**  
 ・ Added history dropdown menus for convenience.  
@@ -65,6 +65,7 @@ In background.js, you might want to adjust these values:
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
