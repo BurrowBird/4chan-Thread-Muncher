@@ -1733,7 +1733,42 @@ chrome.storage.local.get(null, async (result) => {
 chrome.windows.onRemoved.addListener((closedWindowId) => {
     chrome.storage.session.get('controlWindowId', (result) => {
         if (result.controlWindowId && result.controlWindowId === closedWindowId) {
-            log(`Control window ${closedWindowId} closed. Pausing all threads.`, "info");
+            log(`Control window ${closedWindowId} closed. Pausing all threads and resetting Hide DL Icon.`, "info");
+            
+            // Reset Hide DL Icon setting first
+            if (hideDownloadIcon) {
+                hideDownloadIcon = false;
+                chrome.storage.local.set({
+                    hideDownloadIcon: false
+                });
+                chrome.downloads.setShelfEnabled(true);
+                log(`Hide Download Icon automatically unchecked on window close`, "info");
+                
+                // Trigger a small download to force shelf visibility across all windows
+                setTimeout(() => {
+                    const dataUrl = 'data:text/plain;base64,ZHVkCg=='; // "dud" in base64
+                    chrome.downloads.download({
+                        url: dataUrl,
+                        filename: 'temp_shelf_restore.tmp',
+                        conflictAction: 'overwrite'
+                    }, (downloadId) => {
+                        if (chrome.runtime.lastError) {
+                            log(`Failed to start temp download for shelf restore: ${chrome.runtime.lastError.message}`, "warning");
+                        } else {
+                            log(`Started temp download ${downloadId} to restore shelf visibility`, "debug");
+                            // Immediately cancel and erase this download
+                            setTimeout(() => {
+                                chrome.downloads.cancel(downloadId, () => {
+                                    setTimeout(() => {
+                                        chrome.downloads.erase({ id: downloadId });
+                                    }, 100);
+                                });
+                            }, 100);
+                        }
+                    });
+                }, 500);
+            }
+            
             stopScraping();
             windowId = null;
             chrome.storage.session.remove('controlWindowId');
