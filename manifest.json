@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "4chan Thread Muncher 9000 v25-08-09",
+  "name": "4chan Thread Muncher v25-08-10",
   "version": "1.0",
   "description": "Monitors 4chan threads for media and uses 4chan API to download it.",
   "permissions": [
@@ -8,7 +8,8 @@
     "downloads",
     "activeTab",
     "windows",
-    "alarms"
+    "alarms",
+	"downloads.shelf"
   ],
   "background": {
     "service_worker": "background.js"
@@ -21,6 +22,12 @@
     {
       "matches": ["<all_urls>"],
       "js": ["content-script.js"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [ "dud.txt" ],
+      "matches": [ "<all_urls>" ]
     }
   ]
 }

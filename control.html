@@ -117,7 +117,7 @@
       cursor: not-allowed;
     }
 
-    input[type="text"], input[type="number"] {
+    input[type="text"], input[type="number"], input[type="checkbox"] {
       margin: 0;
       padding: 8px;
       background-color: var(--input-bg);
@@ -125,6 +125,12 @@
       border: 1px solid var(--border-color);
       border-radius: 4px;
       font-size: 14px;
+    }
+    input[type="checkbox"] {
+        padding: 0; /* Adjust for checkbox */
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
     }
     /* --- NEW: Style for number input --- */
     input[type="number"] {
@@ -379,6 +385,7 @@
     .thread-control-group label {
         font-size: 13px;
         white-space: nowrap;
+        cursor: pointer;
     }
 
 
@@ -537,6 +544,14 @@
             <label for="maxThreadsInput">Max Threads:</label>
             <input type="number" id="maxThreadsInput" min="1" max="20" title="Max concurrent scraping threads (1-20)">
         </div>
+        <div class="thread-control-group">
+            <input type="checkbox" id="historyToggle" title="If unchecked, removes downloads from Chrome's history.">
+            <label for="historyToggle">Populate DLs</label>
+			<div class="setting-item" style="display: inline-block; margin-left: 15px;">
+			<input type="checkbox" id="hideDownloadIcon" name="hideDownloadIcon">
+			<label for="hideDownloadIcon" title="Hides the browser's download bar/shelf when active.">Hide DL Icon</label>
+			</div>
+        </div>
         <div id="thread-count-container">
             <span id="thread-count">0 / 0 Active Threads</span>
             <span id="countdown-timer">Next: ---</span>
@@ -545,8 +560,7 @@
 </div>
 
 <div id="watch-jobs-container">
-    <!-- Watch jobs will be rendered here by control.js -->
-</div>
+    </div>
 
 <div id="threads-container">
     <div id="threads">

@@ -6,7 +6,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const downloadPathInput = document.getElementById("downloadPath");
   const banUsernameInput = document.getElementById("banUsernameInput");
   const maxThreadsInput = document.getElementById("maxThreadsInput");
-
+  const historyToggle = document.getElementById("historyToggle"); 
+  const hideDownloadIconCheckbox = document.getElementById("hideDownloadIcon");
+  
   // Button Elements
   const addWatchJobBtn = document.getElementById("addWatchJobBtn");
   const addThreadByIdBtn = document.getElementById("addThreadByIdBtn");
@@ -522,6 +524,7 @@ document.addEventListener("DOMContentLoaded", () => {
       resumeAllBtn.disabled = pausedThreads.length === 0;
       updateTimer(status.nextManageThreads, activeThreads.length, status.maxConcurrentThreads || 5);
       maxThreadsInput.value = status.maxConcurrentThreads || 5;
+      historyToggle.checked = status.populateHistory; // <-- NEW: Update checkbox state
       updateThreadsList(status.watchedThreads);
       renderWatchJobs(status.watchJobs || []);
       renderBannedUsernames(status.bannedUsernames || []);
@@ -529,6 +532,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- Event Listeners ---
   window.addEventListener('focus', requestStatusUpdate);
+
+  // <-- NEW: Add event listener for the history toggle checkbox
+  historyToggle.addEventListener("change", () => {
+      const isChecked = historyToggle.checked;
+      chrome.runtime.sendMessage({ type: "updateHistorySetting", value: isChecked });
+  });
+
+// Set initial state only once when page loads
+chrome.runtime.sendMessage({ type: "getStatus" }, (status) => {
+    if (status) {
+        hideDownloadIconCheckbox.checked = status.hideDownloadIcon;
+    }
+});
+
+hideDownloadIconCheckbox.addEventListener("change", () => {
+    const isChecked = hideDownloadIconCheckbox.checked;
+    chrome.runtime.sendMessage({ type: "updateHideIconSetting", value: isChecked });
+});
 
   // Other listeners (addWatchJobBtn, etc.) remain the same
 	addWatchJobBtn.addEventListener("click", () => {
