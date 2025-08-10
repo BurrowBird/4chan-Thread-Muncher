@@ -3,7 +3,6 @@ A chrome extension that uses API (not HTML crawling) to monitor and download med
 Muncher is 99 % AI vibe coded, using free versions of Grok, Claude and Gemini.
 
 Click the extension icon to open the Muncher window. You may close the tab from where you clicked the icon.  
-You can disable chrome's download popups with another extension (search "Disable Download Shelf" or similar).
 
 <br>
 
@@ -13,6 +12,8 @@ You can disable chrome's download popups with another extension (search "Disable
 ・ Multiple watch jobs can run at the same time.  
 ・ Banned usernames (to skip their posts).  
 ・ Muncher prevents downloading duplicates.  
+・ Checkbox: Hide the browser's download icon.  
+・ Checkbox: Auto-remove muncher downloads from the browser's download list.
 
 <br>
 
@@ -22,6 +23,11 @@ You can disable chrome's download popups with another extension (search "Disable
 <br>
 
 ## CHANGELOG:
+
+**2025-08-10**  
+・ Added a "Hide DL Icon" checkbox. If checked, the browser's download icon is hidden.  
+・ Added a "Populate DLs" checkbox. If unchecked, downloads are auto-removed from the browser's download list.  
+
 **2025-08-09**  
 ・ Fixed:  Watch Jobs don't pause processing when muncher window is closed.  
 
@@ -64,6 +70,7 @@ In background.js, you might want to adjust these values:
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
