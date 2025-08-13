@@ -10,9 +10,9 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 ・ Add threads manually by ID.  
 ・ Add threads automatically via a "watch job" (board + regex).  
 
-・ Multiple watch jobs can run at the same time.  
-・ Banned usernames (to skip their posts).  
-・ Muncher prevents downloading duplicates.  
+・ Run multiple watch jobs at the same time.  
+・ Add banned usernames (to skip their posts).  
+・ Duplicate downloads prevention.  
 
 ・ Checkbox: Hide the browser's download icon.  
 ・ Checkbox: Auto-remove muncher downloads from the browser's download list.  
@@ -76,6 +76,7 @@ In background.js, you might want to adjust these values:
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
