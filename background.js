@@ -18,6 +18,7 @@ let downloadPath = '4chan_downloads';
 let MAX_CONCURRENT_THREADS = 5;
 let populateHistory = false;
 let hideDownloadIcon = false;
+let prependParentName = false;
 let isQueueProcessing = false;
 
 const STUCK_TIMER = 5 * 60 * 1000;
@@ -128,10 +129,16 @@ async function fetchWithRetry(url) {
 
 function getFullPath(threadId, username, filename) {
     const sanitizedUsername = username ? username.replace(/[^a-zA-Z0-9_.-]/g, "_") : "Anonymous";
-    const sanitizedFilename = filename ? filename.replace(/[^a-zA-Z0-9_.-]/g, "_") : "unknown_file";
+    let sanitizedFilename = filename ? filename.replace(/[^a-zA-Z0-9_.-]/g, "_") : "unknown_file";
     const cleanDownloadPath = downloadPath.replace(/^\/+|\/+$/g, '');
+
+    if (prependParentName) {
+        sanitizedFilename = `${sanitizedUsername}｜${sanitizedFilename}`;
+    }
+
     return `${cleanDownloadPath}/${threadId}/${sanitizedUsername}/${sanitizedFilename}`;
 }
+
 async function downloadImage(url, threadId, username) {
     const filename = url.split('/').pop();
     const thread = watchedThreads.find(t => t.id === threadId);
@@ -1345,7 +1352,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     nextManageThreads: nextTime,
                     maxConcurrentThreads: MAX_CONCURRENT_THREADS,
                     populateHistory: populateHistory,
-                    hideDownloadIcon: hideDownloadIcon
+                    hideDownloadIcon: hideDownloadIcon,
+                    prependParentName: prependParentName // Add this
                 });
             }).catch(error => {
                 log(`Error getting alarm status for getStatus: ${error.message}`, "error");
@@ -1364,6 +1372,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     maxConcurrentThreads: MAX_CONCURRENT_THREADS,
                     populateHistory: populateHistory,
                     hideDownloadIcon: hideDownloadIcon,
+                    prependParentName: prependParentName, // And this
                     error: "Failed to retrieve alarm status"
                 });
             });
@@ -1626,6 +1635,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 			sendResponse({ success: true });
 			// Don't call debouncedUpdateUI() here - this prevents the checkbox from unchecking
 			break;
+		case 'updatePrependParentNameSetting':
+           prependParentName = !!message.value;
+           chrome.storage.local.set({ prependParentName: prependParentName });
+           log(`Setting 'Prepend Parent Name' updated to: ${prependParentName}`, "info");
+           sendResponse({ success: true });
+			break;
     }
 });
 
@@ -1637,8 +1652,9 @@ async function initializeState(result) {
     downloadPath = (result.downloadPath || '4chan_downloads').replace(/^\/+|\/+$/g, '');
     populateHistory = typeof result.populateHistory === 'boolean' ? result.populateHistory : true;
     hideDownloadIcon = !!result.hideDownloadIcon;
-    chrome.downloads.setShelfEnabled(!hideDownloadIcon);
-    log(`Max concurrent threads: ${MAX_CONCURRENT_THREADS}, Populate History: ${populateHistory}, Hide DL Icon: ${hideDownloadIcon}`);
+    prependParentName = !!result.prependParentName;
+	chrome.downloads.setShelfEnabled(!hideDownloadIcon);
+    log(`Max concurrent threads: ${MAX_CONCURRENT_THREADS}, Populate History: ${populateHistory}, Hide DL Icon: ${hideDownloadIcon}, Prepend PName: ${prependParentName}`);
     watchedThreads = result.watchedThreads || [];
     let totalCorrectedCount = 0;
     watchedThreads.forEach(thread => {

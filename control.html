@@ -546,10 +546,14 @@
         </div>
         <div class="thread-control-group">
             <input type="checkbox" id="historyToggle" title="If unchecked, removes downloads from Chrome's history.">
-            <label for="historyToggle">Populate DLs</label>
+            <label for="historyToggle" title="When unchecked, auto-deletes muncher downloads from the browser's download list.">Populate DLs</label>
 			<div class="setting-item" style="display: inline-block; margin-left: 15px;">
-			<input type="checkbox" id="hideDownloadIcon" name="hideDownloadIcon">
-			<label for="hideDownloadIcon" title="Hides the browser's download bar/shelf when active.">Hide DL Icon</label>
+				<input type="checkbox" id="hideDownloadIcon" name="hideDownloadIcon">
+				<label for="hideDownloadIcon" title="Hides the browser's download bar/shelf when active.">Hide DL Icon</label>
+			</div>
+			<div class="setting-item" style="display: inline-block; margin-left: 15px;">
+				<input type="checkbox" id="prependParentNameToggle" name="prependParentNameToggle">
+				<label for="prependParentNameToggle" title="Prepends the name of the parent folder to each file.">Add PName</label>
 			</div>
         </div>
         <div id="thread-count-container">

@@ -8,6 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const maxThreadsInput = document.getElementById("maxThreadsInput");
   const historyToggle = document.getElementById("historyToggle"); 
   const hideDownloadIconCheckbox = document.getElementById("hideDownloadIcon");
+  const prependParentNameToggle = document.getElementById("prependParentNameToggle");
   
   // Button Elements
   const addWatchJobBtn = document.getElementById("addWatchJobBtn");
@@ -565,7 +566,9 @@ function attachButtonListeners(div) {
       resumeAllBtn.disabled = pausedThreads.length === 0;
       updateTimer(status.nextManageThreads, activeThreads.length, status.maxConcurrentThreads || 5);
       maxThreadsInput.value = status.maxConcurrentThreads || 5;
-      historyToggle.checked = status.populateHistory; // <-- NEW: Update checkbox state
+      historyToggle.checked = status.populateHistory;
+		hideDownloadIconCheckbox.checked = status.hideDownloadIcon;
+		prependParentNameToggle.checked = status.prependParentName;
       updateThreadsList(status.watchedThreads);
       renderWatchJobs(status.watchJobs || []);
       renderBannedUsernames(status.bannedUsernames || []);
@@ -580,16 +583,15 @@ function attachButtonListeners(div) {
       chrome.runtime.sendMessage({ type: "updateHistorySetting", value: isChecked });
   });
 
-// Set initial state only once when page loads
-chrome.runtime.sendMessage({ type: "getStatus" }, (status) => {
-    if (status) {
-        hideDownloadIconCheckbox.checked = status.hideDownloadIcon;
-    }
-});
 
 hideDownloadIconCheckbox.addEventListener("change", () => {
     const isChecked = hideDownloadIconCheckbox.checked;
     chrome.runtime.sendMessage({ type: "updateHideIconSetting", value: isChecked });
+});
+
+prependParentNameToggle.addEventListener("change", () => {
+    const isChecked = prependParentNameToggle.checked;
+    chrome.runtime.sendMessage({ type: "updatePrependParentNameSetting", value: isChecked });
 });
 
   // Other listeners (addWatchJobBtn, etc.) remain the same
