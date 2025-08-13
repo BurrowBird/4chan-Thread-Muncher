@@ -88,6 +88,29 @@
       scroll-behavior: smooth;
     }
 
+.log-entry .log-filename {
+      color: CornflowerBlue; 
+      font-weight: bold;
+    }
+    .log-entry .log-path {
+      color: Peru; 
+      opacity: 0.9;
+    }
+    .log-entry .log-thread-id {
+      color: gold;
+    }
+
+    /* Styles for Light Mode */
+    body:not(.dark-mode) .log-entry .log-filename {
+        color: #7e57c2; /* Deep Purple */
+    }
+    body:not(.dark-mode) .log-entry .log-path {
+        color: #f57c00; /* Dark Orange */
+    }
+    body:not(.dark-mode) .log-entry .log-thread-id {
+        color: #1976d2; /* Dark Blue */
+    }
+	
     .log-entry { margin: 3px 0; line-height: 1.4; }
     .info { color: var(--info-color); }
     .success { color: var(--success-color); }

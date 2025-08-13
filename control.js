@@ -260,17 +260,43 @@ document.addEventListener("DOMContentLoaded", () => {
       bannedUsersList.appendChild(fragment);
   }
 
-  // --- Logging ---
+// --- Logging ---
   function appendLog(message, type = "info") {
       if (!logDiv) return;
       const p = document.createElement("p");
       const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      p.textContent = `${timestamp} - ${message}`;
       p.className = `log-entry ${type}`;
+
+      const timestampSpan = document.createElement('span');
+      timestampSpan.textContent = `${timestamp} - `;
+      p.appendChild(timestampSpan);
+      
+      // Check if the message is our new structured object
+      if (typeof message === 'object' && message.isStructured && Array.isArray(message.parts)) {
+          // Build the log entry from different parts with different styles
+          message.parts.forEach(part => {
+              const span = document.createElement('span');
+              span.textContent = part.text; // Use textContent for security
+              if (part.style) {
+                  span.className = part.style; // Apply class like 'log-filename'
+              }
+              p.appendChild(span);
+          });
+      } else {
+          // It's a regular string, so handle it the old way
+          const contentSpan = document.createElement('span');
+          contentSpan.textContent = message;
+          p.appendChild(contentSpan);
+      }
+
       logDiv.insertBefore(p, logDiv.firstChild);
+      
+      // Auto-scroll if near the top
       if (logDiv.scrollTop <= 50) {
           logDiv.scrollTop = 0;
       }
+
+      // Trim old log entries
       if (logDiv.children.length > 200) {
           logDiv.removeChild(logDiv.lastChild);
       }

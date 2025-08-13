@@ -86,11 +86,16 @@ function debounce(func, wait) {
 
 function log(message, type = "info") {
     const timestamp = new Date().toLocaleTimeString();
-    if (((message.startsWith("checkForNewThreads: Searching") || message.startsWith("searchAndWatchThreads: No new")) && lastLogMessage === message)) {
+    let consoleMessage = message;
+    if (typeof message === 'object' && message.isStructured) {
+        consoleMessage = message.parts.map(p => p.text).join('');
+    }
+
+    if (((consoleMessage.startsWith("checkForNewThreads: Searching") || consoleMessage.startsWith("searchAndWatchThreads: No new")) && lastLogMessage === consoleMessage)) {
         return;
     }
-    console.log(`[${timestamp}] [${type.toUpperCase()}] ${message}`);
-    lastLogMessage = message;
+    console.log(`[${timestamp}] [${type.toUpperCase()}] ${consoleMessage}`);
+    lastLogMessage = consoleMessage;
     if (windowId) {
         chrome.windows.get(windowId, {}, (win) => {
             if (chrome.runtime.lastError) {
@@ -99,7 +104,7 @@ function log(message, type = "info") {
             if (win) {
                 chrome.runtime.sendMessage({
                     type: "log",
-                    message: message,
+                    message: message, // Pass the original object or string
                     logType: type
                 }, () => {
                     if (chrome.runtime.lastError) {}
@@ -108,6 +113,7 @@ function log(message, type = "info") {
         });
     }
 }
+
 async function fetchWithRetry(url) {
     for (let i = 0; i < MAX_RETRIES; i++) {
         if (!isRunning && !isInitialized) throw new Error("Process stopped during fetch");
@@ -276,7 +282,17 @@ async function downloadImage(url, threadId, username) {
                         downloadedImages: Array.from(downloadedImages.entries())
                     });
                     updateWatchedThreads();
-                    log(`Successfully downloaded ${filename} to ${fullPath} for thread ${threadId}`, "success");
+					log({
+						isStructured: true,
+						parts: [
+							{ text: 'Successfully downloaded ' },
+							{ text: filename, style: 'log-filename' },
+							{ text: ' to ', style: 'normal' },
+							{ text: fullPath, style: 'log-path' },
+							{ text: ' for thread ', style: 'normal' },
+							{ text: threadId, style: 'log-thread-id' }
+						]
+					}, "success");
                     debouncedUpdateUI();
                     return {
                         success: true,
