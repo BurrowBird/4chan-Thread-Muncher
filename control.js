@@ -710,10 +710,13 @@ addThreadByIdBtn.addEventListener("click", () => {
       }
   });
 
-  syncCountsBtn.addEventListener("click", () => {
-      syncCountsBtn.disabled = true;
-      chrome.runtime.sendMessage({ type: "syncThreadCounts" }, () => requestStatusUpdate());
-  });
+syncCountsBtn.addEventListener("click", () => {
+    syncCountsBtn.disabled = true;
+    chrome.runtime.sendMessage({ type: "syncThreadCounts" }, (response) => {
+        syncCountsBtn.disabled = false;  // This is missing!
+        requestStatusUpdate();
+    });
+});
 
   addBanBtn.addEventListener("click", () => {
       const usernameToBan = banUsernameInput.value.trim();
