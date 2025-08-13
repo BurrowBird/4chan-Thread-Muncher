@@ -418,99 +418,140 @@ document.addEventListener("DOMContentLoaded", () => {
       if (closeBtn.textContent !== newCloseBtnText) closeBtn.textContent = newCloseBtnText;
   }
 
-  /** Intelligently updates the list of threads in the DOM. */
-  function updateThreadsList(threads) {
-      if (!threads) {
-          threadsDiv.innerHTML = '';
-          threadElements.clear();
-          return;
-      }
-      const sortedThreads = threads.sort((a, b) => {
-          const pA = getThreadSortPriority(a), pB = getThreadSortPriority(b);
-          return pA !== pB ? pA - pB : (b.time || 0) - (a.time || 0);
-      });
-      const desiredIds = new Set(sortedThreads.map(t => t.id));
+/**
+ * Intelligently updates the list of threads in the DOM.
+ * This version stores the latest state of each thread on its DOM element,
+ * allowing event listeners to perform optimistic updates without having stale data.
+ */
+function updateThreadsList(threads) {
+    if (!threads) {
+        threadsDiv.innerHTML = '';
+        threadElements.clear();
+        return;
+    }
+    const sortedThreads = threads.sort((a, b) => {
+        const pA = getThreadSortPriority(a),
+            pB = getThreadSortPriority(b);
+        return pA !== pB ? pA - pB : (b.time || 0) - (a.time || 0);
+    });
+    const desiredIds = new Set(sortedThreads.map(t => t.id));
 
-      for (const [id, element] of threadElements.entries()) {
-          if (!desiredIds.has(id)) {
-              element.remove();
-              threadElements.delete(id);
-          }
-      }
-      
-      sortedThreads.forEach(thread => {
-          if (threadElements.has(thread.id)) {
-              updateThreadElement(threadElements.get(thread.id), thread);
-          } else {
-              const newElement = renderThread(thread);
-              attachButtonListeners(newElement, thread);
-              threadElements.set(thread.id, newElement);
-          }
-      });
-      
-      let hasActive = false, hasInactive = false;
-      sortedThreads.forEach(thread => {
-          getThreadSortPriority(thread) === 0 ? hasActive = true : hasInactive = true;
-          threadsDiv.appendChild(threadElements.get(thread.id));
-      });
-      
-      if (hasActive && hasInactive) {
-          if (!separatorElement || !separatorElement.parentElement) {
-              separatorElement = document.createElement("hr");
-              separatorElement.className = "thread-separator";
-          }
-          const firstInactive = threadElements.get(sortedThreads.find(t => getThreadSortPriority(t) > 0).id);
-          threadsDiv.insertBefore(separatorElement, firstInactive);
-      } else if (separatorElement) {
-          separatorElement.remove();
-          separatorElement = null;
-      }
-  }
+    // Remove thread elements that are no longer in the list
+    for (const [id, element] of threadElements.entries()) {
+        if (!desiredIds.has(id)) {
+            element.remove();
+            threadElements.delete(id);
+        }
+    }
 
-  function attachButtonListeners(div, thread) {
-      const toggleBtn = div.querySelector(".toggleBtn");
-      const closeBtn = div.querySelector(".closeBtn");
-      const removeBtn = div.querySelector(".removeBtn");
-      const forgetBtn = div.querySelector(".forgetBtn");
+    // Add new elements or update existing ones
+    sortedThreads.forEach(thread => {
+        let element = threadElements.get(thread.id);
+        if (element) {
+            updateThreadElement(element, thread);
+        } else {
+            element = renderThread(thread);
+            attachButtonListeners(element); // Listeners are only attached once
+            threadElements.set(thread.id, element);
+        }
+        // ALWAYS update the element's dataset with the latest thread state
+        element.dataset.threadState = JSON.stringify(thread);
+    });
 
-      toggleBtn?.addEventListener("click", () => {
-          toggleBtn.disabled = true;
-          if (toggleBtn.textContent === "Pause") {
-              updateThreadElement(div, { ...thread, active: false });
-          }
-          chrome.runtime.sendMessage({ type: "toggleThread", threadId: thread.id });
-      });
+    // Re-order all elements in the DOM according to the new sort order
+    let hasActive = false,
+        hasInactive = false;
+    sortedThreads.forEach(thread => {
+        if (getThreadSortPriority(thread) === 0) hasActive = true;
+        else if (getThreadSortPriority(thread) < 3) hasInactive = true;
+        threadsDiv.appendChild(threadElements.get(thread.id));
+    });
 
-      closeBtn?.addEventListener("click", () => {
-          if (closeBtn.disabled) return;
-          closeBtn.disabled = true;
-          if (closeBtn.textContent === "Close") {
-              updateThreadElement(div, { ...thread, closed: true, active: false });
-          }
-          chrome.runtime.sendMessage({ type: "closeThread", threadId: thread.id });
-      });
+    // Manage the visual separator between active and inactive threads
+    if (hasActive && hasInactive) {
+        if (!separatorElement || !separatorElement.parentElement) {
+            separatorElement = document.createElement("hr");
+            separatorElement.className = "thread-separator";
+        }
+        const firstInactiveThread = sortedThreads.find(t => getThreadSortPriority(t) > 0);
+        if (firstInactiveThread) {
+            const firstInactiveElement = threadElements.get(firstInactiveThread.id);
+            if (firstInactiveElement) {
+                threadsDiv.insertBefore(separatorElement, firstInactiveElement);
+            }
+        }
+    } else if (separatorElement && separatorElement.parentElement) {
+        separatorElement.remove();
+        separatorElement = null;
+    }
+}
 
-      removeBtn?.addEventListener("click", () => {
-          removeBtn.disabled = true;
-          div.style.transition = 'opacity 0.3s ease';
-          div.style.opacity = '0';
-          setTimeout(() => div.remove(), 300);
-          threadElements.delete(thread.id);
-          chrome.runtime.sendMessage({ type: "removeThread", threadId: thread.id });
-      });
+/**
+ * Attaches event listeners to the buttons within a single thread element.
+ * These listeners read thread state from the DOM to perform optimistic updates,
+ * ensuring the UI is immediately responsive to user actions.
+ */
+function attachButtonListeners(div) {
+    const toggleBtn = div.querySelector(".toggleBtn");
+    const closeBtn = div.querySelector(".closeBtn");
+    const removeBtn = div.querySelector(".removeBtn");
+    const forgetBtn = div.querySelector(".forgetBtn");
 
-      forgetBtn?.addEventListener("click", () => {
-          if (confirm(`Forget download history for thread "${thread.title}" (${thread.id})? This will reset its downloaded count and allow re-downloading.`)) {
-              forgetBtn.disabled = true;
-              const countSpan = div.querySelector('.thread-count');
-              const oldText = countSpan.textContent;
-              countSpan.textContent = oldText.replace(/\(\d+/, '(0');
-              chrome.runtime.sendMessage({ type: "forgetThreadDownloads", threadId: thread.id }, (response) => {
-                  if (!response.success) countSpan.textContent = oldText; // Revert on failure
-              });
-          }
-      });
-  }
+    toggleBtn?.addEventListener("click", () => {
+        const threadElement = toggleBtn.closest('.thread');
+        const thread = JSON.parse(threadElement.dataset.threadState);
+
+        toggleBtn.disabled = true;
+        // Optimistically update the UI and the stored state
+        const optimisticThread = { ...thread, active: !thread.active, error: false };
+        updateThreadElement(threadElement, optimisticThread);
+        threadElement.dataset.threadState = JSON.stringify(optimisticThread);
+
+        chrome.runtime.sendMessage({ type: "toggleThread", threadId: thread.id });
+    });
+
+    closeBtn?.addEventListener("click", () => {
+        if (closeBtn.disabled) return;
+        const threadElement = closeBtn.closest('.thread');
+        const thread = JSON.parse(threadElement.dataset.threadState);
+
+        closeBtn.disabled = true;
+        // Optimistically update the UI and the stored state
+        const optimisticThread = { ...thread, closed: !thread.closed, active: false };
+        updateThreadElement(threadElement, optimisticThread);
+        threadElement.dataset.threadState = JSON.stringify(optimisticThread);
+
+        chrome.runtime.sendMessage({ type: "closeThread", threadId: thread.id });
+    });
+
+    removeBtn?.addEventListener("click", () => {
+        const threadElement = removeBtn.closest('.thread');
+        const thread = JSON.parse(threadElement.dataset.threadState);
+
+        removeBtn.disabled = true;
+        // Optimistically remove the element with a fade-out animation
+        threadElement.style.transition = 'opacity 0.3s ease';
+        threadElement.style.opacity = '0';
+        setTimeout(() => threadElement.remove(), 300);
+        threadElements.delete(thread.id);
+        chrome.runtime.sendMessage({ type: "removeThread", threadId: thread.id });
+    });
+
+    forgetBtn?.addEventListener("click", () => {
+        const threadElement = forgetBtn.closest('.thread');
+        const thread = JSON.parse(threadElement.dataset.threadState);
+
+        if (confirm(`Forget download history for thread "${thread.title}" (${thread.id})? This will reset its downloaded count and allow re-downloading.`)) {
+            forgetBtn.disabled = true;
+            // Optimistically update the download count in the UI
+            const countSpan = div.querySelector('.thread-count');
+            if (countSpan) {
+                countSpan.textContent = `(0 / ${thread.totalImages || '?'})`;
+            }
+            chrome.runtime.sendMessage({ type: "forgetThreadDownloads", threadId: thread.id });
+        }
+    });
+}
 
   function updateUI(status) {
       if (!status) {
