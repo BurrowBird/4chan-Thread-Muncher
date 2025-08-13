@@ -34,11 +34,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const banToggle = document.getElementById("ban-toggle");
 
   // State Variables
+  let pendingCheckboxUpdates = new Set();
   let refreshInterval = null;
   let darkMode = localStorage.getItem("darkMode") === null ? true : localStorage.getItem("darkMode") === "true";
   let currentWindowId = null;
   const threadElements = new Map(); // Cache for DOM elements: <threadId, element>
   let separatorElement = null; // Cache the separator element
+  let statusRequestCounter = 0;
+	let lastAppliedStatusId = 0;
 
   // --- History Dropdown Feature ---
   const BOARD_HISTORY_KEY = 'boardInputHistory';
@@ -303,20 +306,26 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function requestStatusUpdate() {
-      chrome.runtime.sendMessage({ type: "getStatus" }, (status) => {
-          if (chrome.runtime.lastError) {
-              appendLog("Failed to get status from background. It might be restarting.", "error");
-              setButtonsDisabled(true);
-              return;
-          }
-          if (status) {
-              updateUI(status);
-          } else {
-              appendLog("Received empty status from background.", "warning");
-              setButtonsDisabled(true);
-          }
-      });
-  }
+    const requestId = ++statusRequestCounter;
+    chrome.runtime.sendMessage({ type: "getStatus", requestId: requestId }, (status) => {
+        if (chrome.runtime.lastError) {
+            appendLog("Failed to get status from background. It might be restarting.", "error");
+            setButtonsDisabled(true);
+            return;
+        }
+        if (status) {
+            if (status.requestId > lastAppliedStatusId) {
+                lastAppliedStatusId = status.requestId;
+                updateUI(status);
+            } else {
+                console.log(`Ignoring outdated status update with ID ${status.requestId} (last applied: ${lastAppliedStatusId})`);
+            }
+        } else {
+            appendLog("Received empty status from background.", "warning");
+            setButtonsDisabled(true);
+        }
+    });
+}
 
   function updateTimer(nextRefreshTimestamp, activeCount, maxCount) {
       if (refreshInterval) clearInterval(refreshInterval);
@@ -554,44 +563,76 @@ function attachButtonListeners(div) {
     });
 }
 
-  function updateUI(status) {
-      if (!status) {
-          setButtonsDisabled(true);
-          return;
-      }
-      setButtonsDisabled(false);
-      const activeThreads = status.watchedThreads.filter(t => t.active && !t.closed && !t.error);
-      const pausedThreads = status.watchedThreads.filter(t => !t.active && !t.closed && !t.error);
-      pauseAllBtn.disabled = activeThreads.length === 0;
-      resumeAllBtn.disabled = pausedThreads.length === 0;
-      updateTimer(status.nextManageThreads, activeThreads.length, status.maxConcurrentThreads || 5);
-      maxThreadsInput.value = status.maxConcurrentThreads || 5;
-      historyToggle.checked = status.populateHistory;
-		hideDownloadIconCheckbox.checked = status.hideDownloadIcon;
-		prependParentNameToggle.checked = status.prependParentName;
-      updateThreadsList(status.watchedThreads);
-      renderWatchJobs(status.watchJobs || []);
-      renderBannedUsernames(status.bannedUsernames || []);
-  }
+function updateUI(status) {
+    if (!status) {
+        setButtonsDisabled(true);
+        return;
+    }
+    setButtonsDisabled(false);
+    const activeThreads = status.watchedThreads.filter(t => t.active && !t.closed && !t.error);
+    const pausedThreads = status.watchedThreads.filter(t => !t.active && !t.closed && !t.error);
+    pauseAllBtn.disabled = activeThreads.length === 0;
+    resumeAllBtn.disabled = pausedThreads.length === 0;
+    updateTimer(status.nextManageThreads, activeThreads.length, status.maxConcurrentThreads || 5);
+    maxThreadsInput.value = status.maxConcurrentThreads || 5;
+    
+    // Only update checkbox states if they're not currently being updated by user interaction
+    if (!pendingCheckboxUpdates.has('historyToggle')) {
+        historyToggle.checked = status.populateHistory;
+    }
+    if (!pendingCheckboxUpdates.has('hideDownloadIcon')) {
+        hideDownloadIconCheckbox.checked = status.hideDownloadIcon;
+    }
+    if (!pendingCheckboxUpdates.has('prependParentNameToggle')) {
+        prependParentNameToggle.checked = status.prependParentName;
+    }
+    
+    updateThreadsList(status.watchedThreads);
+    renderWatchJobs(status.watchJobs || []);
+    renderBannedUsernames(status.bannedUsernames || []);
+}
 
   // --- Event Listeners ---
   window.addEventListener('focus', requestStatusUpdate);
 
-  // <-- NEW: Add event listener for the history toggle checkbox
-  historyToggle.addEventListener("change", () => {
-      const isChecked = historyToggle.checked;
-      chrome.runtime.sendMessage({ type: "updateHistorySetting", value: isChecked });
-  });
+historyToggle.addEventListener("change", () => {
+    const isChecked = historyToggle.checked;
+    pendingCheckboxUpdates.add('historyToggle');
+    chrome.runtime.sendMessage({ type: "updateHistorySetting", value: isChecked }, (response) => {
+        pendingCheckboxUpdates.delete('historyToggle');
+        if (!response?.success) {
+            // Revert on failure
+            historyToggle.checked = !isChecked;
+            appendLog("Failed to update history setting.", "error");
+        }
+    });
+});
 
 
 hideDownloadIconCheckbox.addEventListener("change", () => {
     const isChecked = hideDownloadIconCheckbox.checked;
-    chrome.runtime.sendMessage({ type: "updateHideIconSetting", value: isChecked });
+    pendingCheckboxUpdates.add('hideDownloadIcon');
+    chrome.runtime.sendMessage({ type: "updateHideIconSetting", value: isChecked }, (response) => {
+        pendingCheckboxUpdates.delete('hideDownloadIcon');
+        if (!response?.success) {
+            // Revert on failure
+            hideDownloadIconCheckbox.checked = !isChecked;
+            appendLog("Failed to update hide download icon setting.", "error");
+        }
+    });
 });
 
 prependParentNameToggle.addEventListener("change", () => {
     const isChecked = prependParentNameToggle.checked;
-    chrome.runtime.sendMessage({ type: "updatePrependParentNameSetting", value: isChecked });
+    pendingCheckboxUpdates.add('prependParentNameToggle');
+    chrome.runtime.sendMessage({ type: "updatePrependParentNameSetting", value: isChecked }, (response) => {
+        pendingCheckboxUpdates.delete('prependParentNameToggle');
+        if (!response?.success) {
+            // Revert on failure
+            prependParentNameToggle.checked = !isChecked;
+            appendLog("Failed to update prepend parent name setting.", "error");
+        }
+    });
 });
 
   // Other listeners (addWatchJobBtn, etc.) remain the same

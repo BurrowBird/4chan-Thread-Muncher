@@ -1336,47 +1336,50 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const messageType = message.type;
     switch (messageType) {
         case 'getStatus':
-            new Promise(resolve => chrome.alarms.get("manageThreads", resolve)).then(alarm => {
-                const nextTime = alarm?.scheduledTime || null;
-                sendResponse({
-                    isRunning: watchedThreads.some(t => t.active && !t.closed),
-                    watchedThreads: watchedThreads.map(thread => ({
-                        ...thread,
-                        skippedImages: Array.from(thread.skippedImages || new Set()),
-                        downloadedCount: thread.downloadedCount || 0,
-                        totalImages: thread.totalImages || 0
-                    })),
-                    trackedDownloads: downloadedImages.size,
-                    watchJobs: watchJobs,
-                    bannedUsernames: Array.from(bannedUsernames),
-                    nextManageThreads: nextTime,
-                    maxConcurrentThreads: MAX_CONCURRENT_THREADS,
-                    populateHistory: populateHistory,
-                    hideDownloadIcon: hideDownloadIcon,
-                    prependParentName: prependParentName // Add this
-                });
-            }).catch(error => {
-                log(`Error getting alarm status for getStatus: ${error.message}`, "error");
-                sendResponse({
-                    isRunning: watchedThreads.some(t => t.active && !t.closed),
-                    watchedThreads: watchedThreads.map(thread => ({
-                        ...thread,
-                        skippedImages: Array.from(thread.skippedImages || new Set()),
-                        downloadedCount: thread.downloadedCount || 0,
-                        totalImages: thread.totalImages || 0
-                    })),
-                    trackedDownloads: downloadedImages.size,
-                    watchJobs: watchJobs,
-                    bannedUsernames: Array.from(bannedUsernames),
-                    nextManageThreads: null,
-                    maxConcurrentThreads: MAX_CONCURRENT_THREADS,
-                    populateHistory: populateHistory,
-                    hideDownloadIcon: hideDownloadIcon,
-                    prependParentName: prependParentName, // And this
-                    error: "Failed to retrieve alarm status"
-                });
-            });
-            return true;
+    new Promise(resolve => chrome.alarms.get("manageThreads", resolve)).then(alarm => {
+        const nextTime = alarm?.scheduledTime || null;
+        sendResponse({
+            isRunning: watchedThreads.some(t => t.active && !t.closed),
+            watchedThreads: watchedThreads.map(thread => ({
+                ...thread,
+                skippedImages: Array.from(thread.skippedImages || new Set()),
+                downloadedCount: thread.downloadedCount || 0,
+                totalImages: thread.totalImages || 0
+            })),
+            trackedDownloads: downloadedImages.size,
+            watchJobs: watchJobs,
+            bannedUsernames: Array.from(bannedUsernames),
+            nextManageThreads: nextTime,
+            maxConcurrentThreads: MAX_CONCURRENT_THREADS,
+            populateHistory: populateHistory,
+            hideDownloadIcon: hideDownloadIcon,
+            prependParentName: prependParentName,
+            requestId: message.requestId || 0
+        });
+    }).catch(error => {
+        log(`Error getting alarm status for getStatus: ${error.message}`, "error");
+        sendResponse({
+            isRunning: watchedThreads.some(t => t.active && !t.closed),
+            watchedThreads: watchedThreads.map(thread => ({
+                ...thread,
+                skippedImages: Array.from(thread.skippedImages || new Set()),
+                downloadedCount: thread.downloadedCount || 0,
+                totalImages: thread.totalImages || 0
+            })),
+            trackedDownloads: downloadedImages.size,
+            watchJobs: watchJobs,
+            bannedUsernames: Array.from(bannedUsernames),
+            nextManageThreads: null,
+            maxConcurrentThreads: MAX_CONCURRENT_THREADS,
+            populateHistory: populateHistory,
+            hideDownloadIcon: hideDownloadIcon,
+            prependParentName: prependParentName,
+            error: "Failed to retrieve alarm status",
+            requestId: message.requestId || 0
+        });
+    });
+    return true;
+	
         case 'start':
             if (message.threadId) {
                 addThreadById(message.board, message.threadId).then(() => sendResponse({
@@ -1585,62 +1588,62 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
             break;
         case 'updateHistorySetting':
-            populateHistory = !!message.value;
-            chrome.storage.local.set({
-                populateHistory: populateHistory
-            });
-            log(`Setting 'Populate Download History' updated to: ${populateHistory}`, "info");
-            sendResponse({
-                success: true
-            });
-            break;
+    populateHistory = !!message.value;
+    chrome.storage.local.set({
+        populateHistory: populateHistory
+    });
+    //log(`Setting 'Populate Download History' updated to: ${populateHistory}`, "info");
+    sendResponse({
+        success: true
+    });
+    break;
 		case 'updateHideIconSetting':
-			hideDownloadIcon = !!message.value;
-			
-			chrome.storage.local.set({
-				hideDownloadIcon: hideDownloadIcon
-			});
-			
-			chrome.downloads.setShelfEnabled(!hideDownloadIcon);
-			log(`Download shelf ${hideDownloadIcon ? 'disabled' : 'enabled'}`, "info");
-			
-			// Only trigger dud download if we're enabling the shelf
-			if (!hideDownloadIcon) {
-				setTimeout(() => {
-					// Create a data URL instead of using a file
-					const dataUrl = 'data:text/plain;base64,ZHVkCg=='; // "dud" in base64
-					chrome.downloads.download({
-						url: dataUrl,
-						filename: 'temp_shelf_trigger.tmp',
-						conflictAction: 'overwrite'
-					}, (downloadId) => {
-						if (chrome.runtime.lastError) {
-							log(`Failed to start temp download: ${chrome.runtime.lastError.message}`, "warning");
-						} else {
-							log(`Started temp download ${downloadId} to trigger shelf`, "debug");
-							// Immediately cancel and erase this download
-							setTimeout(() => {
-								chrome.downloads.cancel(downloadId, () => {
-									setTimeout(() => {
-										chrome.downloads.erase({ id: downloadId });
-									}, 100);
-								});
-							}, 100);
-						}
-					});
-				}, 500);
-			}
-			
-			log(`Setting 'Hide Download Icon' updated to: ${hideDownloadIcon}`, "info");
-			sendResponse({ success: true });
-			// Don't call debouncedUpdateUI() here - this prevents the checkbox from unchecking
-			break;
-		case 'updatePrependParentNameSetting':
-           prependParentName = !!message.value;
-           chrome.storage.local.set({ prependParentName: prependParentName });
-           log(`Setting 'Prepend Parent Name' updated to: ${prependParentName}`, "info");
-           sendResponse({ success: true });
-			break;
+    hideDownloadIcon = !!message.value;
+    
+    chrome.storage.local.set({
+        hideDownloadIcon: hideDownloadIcon
+    });
+    
+    chrome.downloads.setShelfEnabled(!hideDownloadIcon);
+    log(`Download shelf ${hideDownloadIcon ? 'disabled' : 'enabled'}`, "info");
+    
+    // Only trigger dud download if we're enabling the shelf
+    if (!hideDownloadIcon) {
+        setTimeout(() => {
+            // Create a data URL instead of using a file
+            const dataUrl = 'data:text/plain;base64,ZHVkCg=='; // "dud" in base64
+            chrome.downloads.download({
+                url: dataUrl,
+                filename: 'temp_shelf_trigger.tmp',
+                conflictAction: 'overwrite'
+            }, (downloadId) => {
+                if (chrome.runtime.lastError) {
+                    log(`Failed to start temp download: ${chrome.runtime.lastError.message}`, "warning");
+                } else {
+                    log(`Started temp download ${downloadId} to trigger shelf`, "debug");
+                    // Immediately cancel and erase this download
+                    setTimeout(() => {
+                        chrome.downloads.cancel(downloadId, () => {
+                            setTimeout(() => {
+                                chrome.downloads.erase({ id: downloadId });
+                            }, 100);
+                        });
+                    }, 100);
+                }
+            });
+        }, 500);
+    }
+    
+    //log(`Setting 'Hide Download Icon' updated to: ${hideDownloadIcon}`, "info");
+    sendResponse({ success: true });
+    break;
+	
+case 'updatePrependParentNameSetting':
+    prependParentName = !!message.value;
+    chrome.storage.local.set({ prependParentName: prependParentName });
+    //log(`Setting 'Prepend Parent Name' updated to: ${prependParentName}`, "info");
+    sendResponse({ success: true });
+    break;
     }
 });
 
