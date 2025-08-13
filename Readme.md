@@ -13,7 +13,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 ・ Banned usernames (to skip their posts).  
 ・ Muncher prevents downloading duplicates.  
 ・ Checkbox: Hide the browser's download icon.  
-・ Checkbox: Auto-remove muncher downloads from the browser's download list.
+・ Checkbox: Auto-remove muncher downloads from the browser's download list.  
 ・ Checkbox: Prepend name of parent folder to files. (parentname｜filename.ext)  
 
 <br>
@@ -74,6 +74,7 @@ In background.js, you might want to adjust these values:
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
