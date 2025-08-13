@@ -20,7 +20,6 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 <br>
 
 ## KNOWN ISSUES:
-・ Some UI elements don't update until the window is manually refocused.  
 
 <br>
 
@@ -28,6 +27,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 
 **2025-08-13f**  
 ・ Added a "Add PName" checkbox. Prepends name of parent folders to files. (parentname｜filename.ext)  
+・ Fixed: Some UI elements don't update until the window is manually refocused.  
 
 **2025-08-10**  
 ・ Added a "Hide DL Icon" checkbox. If checked, the browser's download icon is hidden.  
@@ -75,6 +75,7 @@ In background.js, you might want to adjust these values:
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
