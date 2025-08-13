@@ -21,6 +21,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 <br>
 
 ## KNOWN ISSUES:
+・ FIX ASAP: When not in focus, muncher can time out.  
 ・ UI can disappear if unfocused and needs a manual refocus.  
 
 <br>
@@ -81,6 +82,7 @@ In background.js, you might want to adjust these values:
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
