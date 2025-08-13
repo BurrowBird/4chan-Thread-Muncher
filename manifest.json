@@ -1,16 +1,19 @@
 {
   "manifest_version": 3,
-  "name": "4chan Thread Muncher v25-08-13f",
+  "name": "4chan Thread Muncher v25-08-13g",
   "version": "1.0",
   "description": "Monitors 4chan threads for media and uses 4chan API to download it.",
   "permissions": [
     "storage",
     "downloads",
-    "activeTab",
     "windows",
     "alarms",
-	"downloads.shelf"
+    "downloads.shelf"
   ],
+  "host_permissions": [
+  "https://a.4cdn.org/",
+  "https://i.4cdn.org/"
+],
   "background": {
     "service_worker": "background.js"
   },
@@ -18,12 +21,6 @@
     "default_popup": "trigger.html",
     "default_icon": "icon.png"
   },
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content-script.js"]
-    }
-  ],
   "web_accessible_resources": [
     {
       "resources": [ "dud.txt" ],
