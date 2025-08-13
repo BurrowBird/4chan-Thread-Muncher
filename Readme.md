@@ -26,6 +26,8 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 <br>
 
 ## CHANGELOG:
+**2025-08-14**  
+・ Changed some log text colors.  
 
 **2025-08-13g**  
 ・ Added a "Add PName" checkbox. Prepends name of parent folders to files. (parentname｜filename.ext)  
@@ -79,6 +81,7 @@ In background.js, you might want to adjust these values:
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
