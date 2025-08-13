@@ -9,6 +9,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 ## FEATURES: 
 ・ Add threads manually by ID.  
 ・ Add threads automatically via a "watch job" (board + regex).  
+
 ・ Multiple watch jobs can run at the same time.  
 ・ Banned usernames (to skip their posts).  
 ・ Muncher prevents downloading duplicates.  
@@ -75,6 +76,7 @@ In background.js, you might want to adjust these values:
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
