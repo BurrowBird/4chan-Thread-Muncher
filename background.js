@@ -316,9 +316,7 @@ const handleDownloadCreated = debounce((downloadItem) => {
             return;
         }
 
-
-        // Rest of existing logic for regular downloads...
-        const pathParts = fullPathRaw.split('/');
+        const pathParts = downloadItem.filename.split('/');
         if (pathParts.length < 4) return;
         
         const filename = pathParts[pathParts.length - 1];
