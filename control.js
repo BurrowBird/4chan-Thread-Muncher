@@ -182,14 +182,22 @@ document.addEventListener("DOMContentLoaded", () => {
                 appendLog("Failed to connect to the background script. Please try reloading.", "error");
             } else {
                 // Now that the background script has confirmed our ID, request the initial status.
-                requestStatusUpdate();
+                chrome.runtime.sendMessage({ type: "getStatus" }, (status) => {
+                    if (status) {
+                        // Set initial checkbox states ONCE
+                        historyToggle.checked = status.populateHistory;
+                        hideDownloadIconCheckbox.checked = status.hideDownloadIcon;
+                        prependParentNameToggle.checked = status.prependParentName;
+                        updateUI(status);
+                    }
+                });
             }
         });
     } else {
         console.error("Could not get current window ID.");
         appendLog("Could not identify this window. Some features may not work.", "error");
     }
-  });
+});
 
   clearBanListBtn.addEventListener("click", () => {
     if (confirm("Are you sure you want to clear the entire banned usernames list?")) {
@@ -576,16 +584,8 @@ function updateUI(status) {
     updateTimer(status.nextManageThreads, activeThreads.length, status.maxConcurrentThreads || 5);
     maxThreadsInput.value = status.maxConcurrentThreads || 5;
     
-    // Only update checkbox states if they're not currently being updated by user interaction
-    if (!pendingCheckboxUpdates.has('historyToggle')) {
-        historyToggle.checked = status.populateHistory;
-    }
-    if (!pendingCheckboxUpdates.has('hideDownloadIcon')) {
-        hideDownloadIconCheckbox.checked = status.hideDownloadIcon;
-    }
-    if (!pendingCheckboxUpdates.has('prependParentNameToggle')) {
-        prependParentNameToggle.checked = status.prependParentName;
-    }
+    // REMOVE these checkbox updates completely:
+    // The checkboxes will only be set on initial load and when settings actually change
     
     updateThreadsList(status.watchedThreads);
     renderWatchJobs(status.watchJobs || []);
