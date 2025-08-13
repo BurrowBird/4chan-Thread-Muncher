@@ -21,14 +21,18 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 <br>
 
 ## KNOWN ISSUES:
+・ activeTab permission might be unnecessary at this point. See if can be removed or not.
+・ content-script.js might be unnecessary. 
 
 <br>
 
 ## CHANGELOG:
 
-**2025-08-13f**  
+**2025-08-13g**  
 ・ Added a "Add PName" checkbox. Prepends name of parent folders to files. (parentname｜filename.ext)  
 ・ Fixed: Some UI elements don't update until the window is manually refocused.  
+・ Removed activeTab permission - no longer needed.  
+・ Removed content-script.js - no longer needed.  
 
 **2025-08-10**  
 ・ Added a "Hide DL Icon" checkbox. If checked, the browser's download icon is hidden.  
@@ -76,6 +80,7 @@ In background.js, you might want to adjust these values:
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
