@@ -26,7 +26,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 ## CHANGELOG:
 
 **2025-08-13d**  
-・ Added: "Add PName" checkbox. Prepend name of parent folder to files. (parentname｜filename.ext)  
+・ Added a "Add PName" checkbox. Prepends name of parent folder to files. (parentname｜filename.ext)  
 
 **2025-08-10**  
 ・ Added a "Hide DL Icon" checkbox. If checked, the browser's download icon is hidden.  
@@ -74,6 +74,7 @@ In background.js, you might want to adjust these values:
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
