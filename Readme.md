@@ -21,7 +21,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 <br>
 
 ## KNOWN ISSUES:
-・ Getting HTTP error 407-ed. Window timeout/focus issue? Investigate.
+・ Getting HTTP error 407-ed. Window timeout/focus issue? Investigate.  
       ・ Needs a better way to maintain an authenticated proxy session?
 
 <br>
@@ -58,6 +58,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
