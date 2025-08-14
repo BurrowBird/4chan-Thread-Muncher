@@ -16,7 +16,8 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 
 ・ Checkbox: Hide the browser's download icon.  
 ・ Checkbox: Auto-remove muncher downloads from the browser's download list.  
-・ Checkbox: Prepend name of parent folders to files.
+・ Checkbox: Prepend name of parent folders to files.  
+・ Checkbox: Hide closed or errored threads from the list.  
 
 <br>
 
@@ -86,6 +87,7 @@ In background.js, you might want to adjust these values:
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
