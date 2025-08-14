@@ -43,13 +43,11 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 ・ $\color{Lime}{\textsf{Added}}$ a "Populate DLs" checkbox. If unchecked, downloads are auto-removed from the browser's download list.  
 
 **2025-08-09**  
-・ $\color{Yellow}{\textsf{Fixed}}$:  Watch Jobs don't pause processing when muncher window is closed.  
-
-**2025-08-08c**  
 ・ $\color{Lime}{\textsf{Added}}$ simultaneous watching of multiple searches ("board + regex").  
 ・ $\color{Lime}{\textsf{Added}}$ history dropdown menus for convenience.  
 ・ $\color{Lime}{\textsf{Added}}$ a UI element to change max concurrent threads.  
 ・ $\color{Lime}{\textsf{Added}}$ the ability to ban usernames.  
+・ $\color{Yellow}{\textsf{Fixed}}$:  Watch Jobs don't pause processing when muncher window is closed.  
 ・ $\color{Yellow}{\textsf{Fixed}}$: When adding a new Watch Job, downloads wait for the Next Update timer to run out.  
 ・ $\color{Yellow}{\textsf{Fixed}}$: Next Update timer doesn't show up until the window is manually refocused.  
 ・ $\color{Purple}{\textsf{Improved}}$ rendering and fixed weird flashing buttons.  
@@ -76,6 +74,7 @@ In background.js, you might want to adjust these values:
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
