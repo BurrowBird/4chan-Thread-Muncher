@@ -28,6 +28,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 **Next Update**  
 ・ $\color{Purple}{\textsf{Improved}}$ some UI elements spacing.  
 ・ $\color{Yellow}{\textsf{Fixed}}$: Getting HTTP 407 errors if the muncher window is out of focus for too long while using a VPN.  
+・ $\color{Yellow}{\textsf{Fixed}}$: Muncher no longer checks for new threads if left unfocused for a time.  
 
 **2025-08-14f**  
 ・ $\color{Lime}{\textsf{Added}}$ a "Hide Inactive" checkbox. Hides closed or errored threads from the list.  
@@ -60,6 +61,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
