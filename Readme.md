@@ -35,7 +35,6 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 **2025-08-14f**  
 ・ $\color{Lime}{\textsf{Added}}$ a "Hide Inactive" checkbox. Hides closed or errored threads from the list.  
 ・ $\color{Purple}{\textsf{Improved}}$ some log text colors.  
-・ $\color{Yellow}{\textsf{Fixed}}$: When not in focus, muncher can time out.  
 ・ $\color{Yellow}{\textsf{Fixed}}$: UI can disappear if unfocused and needs a manual refocus.  
 ・ $\color{Yellow}{\textsf{Fixed}}$: Stuck timer never closing a thread.  
 
@@ -63,6 +62,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
