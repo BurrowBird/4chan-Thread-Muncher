@@ -13,7 +13,7 @@
       --button-hover: #e0e0e0;
       --log-bg: #ffffff;
       --error-color: #f28b82; /* Red */
-      --warning-color: #fdd663; /* Yellow */
+      --warning-color: orange; /* Orange */
       --success-color: #81c995; /* Green */
       --info-color: #8ab4f8; /* Blue */
       --closed-color: #808080; /* Grey */
@@ -30,7 +30,7 @@
       --button-hover: #5b6078; /* Catppuccin Macchiato Overlay0 */
       --log-bg: #181926; /* Catppuccin Macchiato Mantle */
       --error-color: #ed8796; /* Catppuccin Macchiato Red */
-      --warning-color: #eed49f; /* Catppuccin Macchiato Yellow */
+      --warning-color: #ed8796; /* Catppuccin Macchiato Red */
       --success-color: #a6da95; /* Catppuccin Macchiato Green */
       --info-color: #8aadf4; /* Catppuccin Macchiato Blue */
       --closed-color: #6e738d; /* Catppuccin Macchiato Overlay1 */
@@ -577,6 +577,10 @@
 			<div class="setting-item" style="display: inline-block; margin-left: 15px;">
 				<input type="checkbox" id="prependParentNameToggle" name="prependParentNameToggle">
 				<label for="prependParentNameToggle" title="Prepends the name of the parent folder to each file.">Add PName</label>
+			</div>
+			<div class="setting-item" style="display: inline-block; margin-left: 15px;">
+				<input type="checkbox" id="hideClosedToggle" name="hideClosedToggle">
+				<label for="hideClosedToggle" title="Hides threads that are marked as closed or errored from the list.">Hide Inactive</label>
 			</div>
         </div>
         <div id="thread-count-container">

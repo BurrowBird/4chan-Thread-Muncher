@@ -6,10 +6,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const downloadPathInput = document.getElementById("downloadPath");
   const banUsernameInput = document.getElementById("banUsernameInput");
   const maxThreadsInput = document.getElementById("maxThreadsInput");
-  const historyToggle = document.getElementById("historyToggle"); 
+  const historyToggle = document.getElementById("historyToggle");
   const hideDownloadIconCheckbox = document.getElementById("hideDownloadIcon");
   const prependParentNameToggle = document.getElementById("prependParentNameToggle");
-  
+  const hideClosedToggle = document.getElementById("hideClosedToggle");
+
   // Button Elements
   const addWatchJobBtn = document.getElementById("addWatchJobBtn");
   const addThreadByIdBtn = document.getElementById("addThreadByIdBtn");
@@ -34,14 +35,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const banToggle = document.getElementById("ban-toggle");
 
   // State Variables
-  let pendingCheckboxUpdates = new Set();
   let refreshInterval = null;
   let darkMode = localStorage.getItem("darkMode") === null ? true : localStorage.getItem("darkMode") === "true";
   let currentWindowId = null;
   const threadElements = new Map(); // Cache for DOM elements: <threadId, element>
   let separatorElement = null; // Cache the separator element
   let statusRequestCounter = 0;
-	let lastAppliedStatusId = 0;
+  let lastAppliedStatusId = 0;
+  let pendingCheckboxUpdates = new Set();
 
   // --- History Dropdown Feature ---
   const BOARD_HISTORY_KEY = 'boardInputHistory';
@@ -61,30 +62,21 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
 
-/**
-   * Adds a new value to a specified history list in chrome.storage.
-   * @param {string} storageKey The key for the history array in storage.
-   * @param {string} value The value to add to the history.
-   */
   const addToHistory = (storageKey, value) => {
     const trimmedValue = value.trim();
     if (!trimmedValue) return; // Do not save empty values
 
     chrome.storage.local.get([storageKey], (result) => {
       let history = result[storageKey] || [];
-      // Remove the value if it already exists to move it to the top
       history = history.filter(item => item !== trimmedValue);
-      // Add the new value to the beginning of the array
       history.unshift(trimmedValue);
-      // Trim the history to the maximum allowed size
       if (history.length > MAX_HISTORY_SIZE) {
         history = history.slice(0, MAX_HISTORY_SIZE);
       }
-      // Save the updated history back to storage
       chrome.storage.local.set({ [storageKey]: history });
     });
   };
-  
+
   const renderHistoryItems = (input, dropdown, storageKey, history) => {
     dropdown.innerHTML = '';
     if (!history || history.length === 0) {
@@ -99,46 +91,38 @@ document.addEventListener("DOMContentLoaded", () => {
     history.forEach(itemText => {
       const item = document.createElement('div');
       item.className = 'history-item';
-
       const text = document.createElement('span');
       text.className = 'history-item-text';
       text.textContent = itemText;
       text.title = itemText;
       item.appendChild(text);
-
       const del = document.createElement('span');
       del.className = 'history-item-delete';
       del.innerHTML = '&times;';
       del.title = 'Remove from history';
       item.appendChild(del);
-
       item.addEventListener('click', () => {
         input.value = itemText;
         dropdown.style.display = 'none';
       });
-
       del.addEventListener('click', (e) => {
         e.stopPropagation();
         deleteHistoryItem(storageKey, itemText);
       });
-
       dropdown.appendChild(item);
     });
   };
 
   const setupHistoryDropdown = (input, dropdown, container, storageKey) => {
     const arrow = container.querySelector('.history-arrow');
-
     chrome.storage.local.get([storageKey], (result) => {
       renderHistoryItems(input, dropdown, storageKey, result[storageKey] || []);
     });
-
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area === 'local' && changes[storageKey]) {
         renderHistoryItems(input, dropdown, storageKey, changes[storageKey].newValue || []);
       }
     });
-
     arrow.addEventListener('click', (e) => {
       e.stopPropagation();
       const isVisible = dropdown.style.display === 'block';
@@ -157,70 +141,65 @@ document.addEventListener("DOMContentLoaded", () => {
       d.style.display = 'none';
     });
   });
-  // --- End of History Dropdown Feature ---
 
-
-  // --- Initialization ---
   function applyDarkMode() {
-      if (darkMode) {
-          document.body.classList.add("dark-mode");
-          modeToggleBtn.textContent = "Light Mode";
-      } else {
-          document.body.classList.remove("dark-mode");
-          modeToggleBtn.textContent = "Dark Mode";
-      }
+    if (darkMode) {
+      document.body.classList.add("dark-mode");
+      modeToggleBtn.textContent = "Light Mode";
+    } else {
+      document.body.classList.remove("dark-mode");
+      modeToggleBtn.textContent = "Dark Mode";
+    }
   }
   applyDarkMode();
 
   chrome.windows.getCurrent((window) => {
-    if (window && window.id) {
-        currentWindowId = window.id;
-        // Send the window ID and wait for the callback before requesting status
-        chrome.runtime.sendMessage({ type: "setWindowId", windowId: window.id }, () => {
-            if (chrome.runtime.lastError) {
-                console.error("Failed to set window ID:", chrome.runtime.lastError.message);
-                appendLog("Failed to connect to the background script. Please try reloading.", "error");
-            } else {
-                // Now that the background script has confirmed our ID, request the initial status.
-                chrome.runtime.sendMessage({ type: "getStatus" }, (status) => {
-                    if (status) {
-                        // Set initial checkbox states ONCE
-                        historyToggle.checked = status.populateHistory;
-                        hideDownloadIconCheckbox.checked = status.hideDownloadIcon;
-                        prependParentNameToggle.checked = status.prependParentName;
-                        updateUI(status);
-                    }
-                });
-            }
+  if (window && window.id) {
+    currentWindowId = window.id;
+    chrome.runtime.sendMessage({ type: "setWindowId", windowId: window.id }, () => {
+      if (chrome.runtime.lastError) {
+        console.error("Failed to set window ID:", chrome.runtime.lastError.message);
+        appendLog("Failed to connect to the background script. Please try reloading.", "error");
+      } else {
+        chrome.runtime.sendMessage({ type: "getStatus" }, (status) => {
+          if (status) {
+            historyToggle.checked = status.populateHistory;
+            hideDownloadIconCheckbox.checked = status.hideDownloadIcon;
+            prependParentNameToggle.checked = status.prependParentName;
+            hideClosedToggle.checked = status.hideClosedThreads;
+            updateUI(status);
+          }
         });
-    } else {
-        console.error("Could not get current window ID.");
-        appendLog("Could not identify this window. Some features may not work.", "error");
-    }
+      }
+    });
+  } else {
+    console.error("Could not get current window ID.");
+    appendLog("Could not identify this window. Some features may not work.", "error");
+  }
 });
 
   clearBanListBtn.addEventListener("click", () => {
     if (confirm("Are you sure you want to clear the entire banned usernames list?")) {
-        clearBanListBtn.disabled = true;
-        chrome.runtime.sendMessage({ type: "clearBannedUsernames" }, (response) => {
-            if (response?.success) {
-                appendLog("Banned usernames list cleared.", "success");
-            } else {
-                appendLog("Failed to clear banned usernames list.", "error");
-            }
-            requestStatusUpdate();
-            clearBanListBtn.disabled = false;
-        });
+      clearBanListBtn.disabled = true;
+      chrome.runtime.sendMessage({ type: "clearBannedUsernames" }, (response) => {
+        if (response?.success) {
+          appendLog("Banned usernames list cleared.", "success");
+        } else {
+          appendLog("Failed to clear banned usernames list.", "error");
+        }
+        requestStatusUpdate();
+        clearBanListBtn.disabled = false;
+      });
     }
   });
 
   let isBanSectionCollapsed = localStorage.getItem("banSectionCollapsed") === "true";
   function applyBanSectionState() {
-      if (isBanSectionCollapsed) {
-          banManagementDiv.classList.add("collapsed");
-      } else {
-          banManagementDiv.classList.remove("collapsed");
-      }
+    if (isBanSectionCollapsed) {
+      banManagementDiv.classList.add("collapsed");
+    } else {
+      banManagementDiv.classList.remove("collapsed");
+    }
   }
   applyBanSectionState();
 
@@ -233,557 +212,522 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   function renderBannedUsernames(usernames) {
-      if (!bannedUsersList) return;
-      bannedUsersList.innerHTML = '';
-      if (!usernames || usernames.length === 0) {
-          return;
-      }
-      const sortedUsernames = [...usernames].sort((a, b) => a.localeCompare(b));
-      const fragment = document.createDocumentFragment();
-      sortedUsernames.forEach(username => {
-          const span = document.createElement('span');
-          span.className = 'banned-user-item';
-          span.textContent = username;
-          span.title = 'Click to remove';
-          span.addEventListener('click', () => {
-              span.style.opacity = '0.5';
-              chrome.runtime.sendMessage({ type: "removeBannedUsername", username: username }, (response) => {
-                  if (!response?.success) {
-                      appendLog(`Failed to remove ban for "${username}"`, "error");
-                      span.style.opacity = '1';
-                  }
-                  requestStatusUpdate();
-              });
-          });
-          fragment.appendChild(span);
+    if (!bannedUsersList) return;
+    bannedUsersList.innerHTML = '';
+    if (!usernames || usernames.length === 0) {
+      return;
+    }
+    const sortedUsernames = [...usernames].sort((a, b) => a.localeCompare(b));
+    const fragment = document.createDocumentFragment();
+    sortedUsernames.forEach(username => {
+      const span = document.createElement('span');
+      span.className = 'banned-user-item';
+      span.textContent = username;
+      span.title = 'Click to remove';
+      span.addEventListener('click', () => {
+        span.style.opacity = '0.5';
+        chrome.runtime.sendMessage({ type: "removeBannedUsername", username: username }, (response) => {
+          if (!response?.success) {
+            appendLog(`Failed to remove ban for "${username}"`, "error");
+            span.style.opacity = '1';
+          }
+          requestStatusUpdate();
+        });
       });
-      bannedUsersList.appendChild(fragment);
+      fragment.appendChild(span);
+    });
+    bannedUsersList.appendChild(fragment);
   }
 
-// --- Logging ---
   function appendLog(message, type = "info") {
-      if (!logDiv) return;
-      const p = document.createElement("p");
-      const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      p.className = `log-entry ${type}`;
-
-      const timestampSpan = document.createElement('span');
-      timestampSpan.textContent = `${timestamp} - `;
-      p.appendChild(timestampSpan);
-      
-      // Check if the message is our new structured object
-      if (typeof message === 'object' && message.isStructured && Array.isArray(message.parts)) {
-          // Build the log entry from different parts with different styles
-          message.parts.forEach(part => {
-              const span = document.createElement('span');
-              span.textContent = part.text; // Use textContent for security
-              if (part.style) {
-                  span.className = part.style; // Apply class like 'log-filename'
-              }
-              p.appendChild(span);
-          });
-      } else {
-          // It's a regular string, so handle it the old way
-          const contentSpan = document.createElement('span');
-          contentSpan.textContent = message;
-          p.appendChild(contentSpan);
-      }
-
-      logDiv.insertBefore(p, logDiv.firstChild);
-      
-      // Auto-scroll if near the top
-      if (logDiv.scrollTop <= 50) {
-          logDiv.scrollTop = 0;
-      }
-
-      // Trim old log entries
-      if (logDiv.children.length > 200) {
-          logDiv.removeChild(logDiv.lastChild);
-      }
+    if (!logDiv) return;
+    const p = document.createElement("p");
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    p.className = `log-entry ${type}`;
+    const timestampSpan = document.createElement('span');
+    timestampSpan.textContent = `${timestamp} - `;
+    p.appendChild(timestampSpan);
+    if (typeof message === 'object' && message.isStructured && Array.isArray(message.parts)) {
+      message.parts.forEach(part => {
+        const span = document.createElement('span');
+        span.textContent = part.text;
+        if (part.style) {
+          span.className = part.style;
+        }
+        p.appendChild(span);
+      });
+    } else {
+      const contentSpan = document.createElement('span');
+      contentSpan.textContent = message;
+      p.appendChild(contentSpan);
+    }
+    logDiv.insertBefore(p, logDiv.firstChild);
+    if (logDiv.scrollTop <= 50) {
+      logDiv.scrollTop = 0;
+    }
+    if (logDiv.children.length > 200) {
+      logDiv.removeChild(logDiv.lastChild);
+    }
   }
 
-  // --- UI Update Logic ---
-
-  /** Globally enables or disables all major buttons and inputs. */
   function setButtonsDisabled(disabled) {
-      const elements = [
-          addWatchJobBtn, addThreadByIdBtn, pauseAllBtn, resumeAllBtn,
-          checkAllBtn, forgetAllBtn, removeAllBtn, syncCountsBtn, addBanBtn,
-          clearBanListBtn, maxThreadsInput
-      ];
-      elements.forEach(el => {
-          if (el) el.disabled = disabled;
-      });
-      threadsDiv.querySelectorAll('button').forEach(btn => btn.disabled = disabled);
+    const elements = [
+      addWatchJobBtn, addThreadByIdBtn, pauseAllBtn, resumeAllBtn,
+      checkAllBtn, forgetAllBtn, removeAllBtn, syncCountsBtn, addBanBtn,
+      clearBanListBtn, maxThreadsInput
+    ];
+    elements.forEach(el => {
+      if (el) el.disabled = disabled;
+    });
+    threadsDiv.querySelectorAll('button').forEach(btn => btn.disabled = disabled);
   }
 
   function renderWatchJobs(jobs) {
-      watchJobsContainer.innerHTML = '';
-      if (!jobs || jobs.length === 0) return;
-      const fragment = document.createDocumentFragment();
-      jobs.forEach(job => {
-          const jobDiv = document.createElement('div');
-          jobDiv.className = 'watch-job-item';
-          jobDiv.dataset.jobId = job.id;
-          jobDiv.innerHTML = `<span class="watch-job-text">Watching: /${job.board}/ for "${job.searchTerm}"</span>`;
-          const removeBtn = document.createElement('span');
-          removeBtn.className = 'watch-job-remove';
-          removeBtn.innerHTML = '&times;';
-          removeBtn.title = 'Remove this watch job';
-          removeBtn.addEventListener('click', () => {
-              chrome.runtime.sendMessage({ type: "removeWatchJob", id: job.id }, requestStatusUpdate);
-          });
-          jobDiv.appendChild(removeBtn);
-          fragment.appendChild(jobDiv);
+    watchJobsContainer.innerHTML = '';
+    if (!jobs || jobs.length === 0) return;
+    const fragment = document.createDocumentFragment();
+    jobs.forEach(job => {
+      const jobDiv = document.createElement('div');
+      jobDiv.className = 'watch-job-item';
+      jobDiv.dataset.jobId = job.id;
+      jobDiv.innerHTML = `<span class="watch-job-text">Watching: /${job.board}/ for "${job.searchTerm}"</span>`;
+      const removeBtn = document.createElement('span');
+      removeBtn.className = 'watch-job-remove';
+      removeBtn.innerHTML = '&times;';
+      removeBtn.title = 'Remove this watch job';
+      removeBtn.addEventListener('click', () => {
+        chrome.runtime.sendMessage({ type: "removeWatchJob", id: job.id }, requestStatusUpdate);
       });
-      watchJobsContainer.appendChild(fragment);
+      jobDiv.appendChild(removeBtn);
+      fragment.appendChild(jobDiv);
+    });
+    watchJobsContainer.appendChild(fragment);
   }
 
   function requestStatusUpdate() {
     const requestId = ++statusRequestCounter;
     chrome.runtime.sendMessage({ type: "getStatus", requestId: requestId }, (status) => {
-        if (chrome.runtime.lastError) {
-            appendLog("Failed to get status from background. It might be restarting.", "error");
-            setButtonsDisabled(true);
-            return;
-        }
-        if (status) {
-            if (status.requestId > lastAppliedStatusId) {
-                lastAppliedStatusId = status.requestId;
-                updateUI(status);
-            } else {
-                console.log(`Ignoring outdated status update with ID ${status.requestId} (last applied: ${lastAppliedStatusId})`);
-            }
+      if (chrome.runtime.lastError) {
+        appendLog("Failed to get status from background. It might be restarting.", "error");
+        setButtonsDisabled(true);
+        return;
+      }
+      if (status) {
+        if (status.requestId > lastAppliedStatusId) {
+          lastAppliedStatusId = status.requestId;
+          updateUI(status);
         } else {
-            appendLog("Received empty status from background.", "warning");
-            setButtonsDisabled(true);
+          console.log(`Ignoring outdated status update with ID ${status.requestId} (last applied: ${lastAppliedStatusId})`);
         }
+      } else {
+        appendLog("Received empty status from background.", "warning");
+        setButtonsDisabled(true);
+      }
     });
-}
+  }
 
   function updateTimer(nextRefreshTimestamp, activeCount, maxCount) {
-      if (refreshInterval) clearInterval(refreshInterval);
-      threadCountSpan.textContent = `${activeCount} / ${maxCount} Active`;
-      if (!nextRefreshTimestamp) {
-          countdownSpan.textContent = "Next Update: ---";
-          return;
+    if (refreshInterval) clearInterval(refreshInterval);
+    threadCountSpan.textContent = `${activeCount} / ${maxCount} Active`;
+    if (!nextRefreshTimestamp) {
+      countdownSpan.textContent = "Next Update: ---";
+      return;
+    }
+    function updateCountdown() {
+      const now = Date.now();
+      const timeLeftMs = nextRefreshTimestamp - now;
+      if (timeLeftMs > 0) {
+        const seconds = Math.max(0, Math.floor(timeLeftMs / 1000));
+        countdownSpan.textContent = `Next Update: ${seconds}s`;
+      } else {
+        countdownSpan.textContent = "Next Update: Now";
+        if (refreshInterval) clearInterval(refreshInterval);
       }
-      function updateCountdown() {
-          const now = Date.now();
-          const timeLeftMs = nextRefreshTimestamp - now;
-          if (timeLeftMs > 0) {
-              const seconds = Math.max(0, Math.floor(timeLeftMs / 1000));
-              countdownSpan.textContent = `Next Update: ${seconds}s`;
-          } else {
-              countdownSpan.textContent = "Next Update: Now";
-              if (refreshInterval) clearInterval(refreshInterval);
-          }
-      }
-      updateCountdown();
-      refreshInterval = setInterval(updateCountdown, 1000);
+    }
+    updateCountdown();
+    refreshInterval = setInterval(updateCountdown, 1000);
   }
 
   function formatDate(timestamp) {
-      if (!timestamp) return "N/A";
-      try {
-          return new Date(timestamp * 1000).toLocaleString(undefined, {
-              year: '2-digit', month: 'numeric', day: 'numeric',
-              hour: 'numeric', minute: '2-digit'
-          });
-      } catch (e) { return "Invalid Date"; }
+    if (!timestamp) return "N/A";
+    try {
+      return new Date(timestamp * 1000).toLocaleString(undefined, {
+        year: '2-digit', month: 'numeric', day: 'numeric',
+        hour: 'numeric', minute: '2-digit'
+      });
+    } catch (e) { return "Invalid Date"; }
   }
 
   function getThreadSortPriority(thread) {
-      if (thread.active && !thread.closed && !thread.error) return 0; // Active
-      if (!thread.active && !thread.closed && !thread.error) return 1; // Paused
-      if (thread.error) return 2; // Error
-      if (thread.closed) return 3; // Closed
-      return 4; // Failsafe
+    if (thread.active && !thread.closed && !thread.error) return 0; // Active
+    if (!thread.active && !thread.closed && !thread.error) return 1; // Paused
+    if (thread.error) return 2; // Error
+    if (thread.closed) return 3; // Closed
+    return 4; // Failsafe
   }
 
-  /** Renders a new thread element. Used only for creation. */
   function renderThread(thread) {
-      const div = document.createElement("div");
-      div.className = "thread";
-      div.dataset.threadId = thread.id;
-      div.innerHTML = `
-        <div class="thread-details">
-          <span class="thread-count"></span>
-          <span class="thread-title"></span>
-          <span class="thread-creation"></span>
-        </div>
-        <div class="thread-buttons">
-          <button class="toggleBtn"></button>
-          <button class="closeBtn"></button>
-          <button class="forgetBtn">Forget History</button>
-          <button class="removeBtn danger-button">Remove</button>
-        </div>`;
-      updateThreadElement(div, thread); // Populate with initial data
-      return div;
+    const div = document.createElement("div");
+    div.className = "thread";
+    div.dataset.threadId = thread.id;
+    div.innerHTML = `
+      <div class="thread-details">
+        <span class="thread-count"></span>
+        <span class="thread-title"></span>
+        <span class="thread-creation"></span>
+      </div>
+      <div class="thread-buttons">
+        <button class="toggleBtn"></button>
+        <button class="closeBtn"></button>
+        <button class="forgetBtn">Forget History</button>
+        <button class="removeBtn danger-button">Remove</button>
+      </div>`;
+    updateThreadElement(div, thread);
+    return div;
   }
 
-  /** Updates an existing thread element in-place without rebuilding it. */
   function updateThreadElement(element, thread) {
-      const isClosed = thread.closed;
-      const isActive = thread.active && !isClosed && !thread.error;
-      const isError = thread.error;
-
-      let countClass = 'thread-count-paused', titleClass = 'thread-title-paused', toggleBtnText = "Resume";
-
-      if (isActive) {
-          countClass = 'thread-count-active'; titleClass = 'thread-title-active'; toggleBtnText = "Pause";
-      } else if (isError) {
-          countClass = 'thread-count-error'; titleClass = 'thread-title-error'; toggleBtnText = "Retry";
-      } else if (isClosed) {
-          countClass = 'thread-count-closed'; titleClass = 'thread-title-closed'; toggleBtnText = "Resume";
-      }
-
-      const countSpan = element.querySelector(".thread-count");
-      const titleSpan = element.querySelector(".thread-title");
-      const creationSpan = element.querySelector(".thread-creation");
-      const toggleBtn = element.querySelector(".toggleBtn");
-      const closeBtn = element.querySelector(".closeBtn");
-
-      const newCountText = `(${thread.downloadedCount || 0} / ${thread.totalImages || '?'})`;
-      if (countSpan.textContent !== newCountText) countSpan.textContent = newCountText;
-      if (!countSpan.classList.contains(countClass)) countSpan.className = `thread-count ${countClass}`;
-      
-      const newTitleText = `${thread.title} (${thread.id})`;
-      if (titleSpan.textContent !== newTitleText) titleSpan.textContent = newTitleText;
-      if (!titleSpan.classList.contains(titleClass)) titleSpan.className = `thread-title ${titleClass}`;
-
-      const newCreationText = `Created: ${formatDate(thread.time)}`;
-      if (creationSpan.textContent !== newCreationText) creationSpan.textContent = newCreationText;
-      
-      if (toggleBtn.textContent !== toggleBtnText) toggleBtn.textContent = toggleBtnText;
-      toggleBtn.disabled = isClosed;
-      
-      const newCloseBtnText = isClosed ? "Re-open" : "Close";
-      if (closeBtn.textContent !== newCloseBtnText) closeBtn.textContent = newCloseBtnText;
+    const isClosed = thread.closed;
+    const isActive = thread.active && !isClosed && !thread.error;
+    const isError = thread.error;
+    let countClass = 'thread-count-paused', titleClass = 'thread-title-paused', toggleBtnText = "Resume";
+    if (isActive) {
+      countClass = 'thread-count-active'; titleClass = 'thread-title-active'; toggleBtnText = "Pause";
+    } else if (isError) {
+      countClass = 'thread-count-error'; titleClass = 'thread-title-error'; toggleBtnText = "Retry";
+    } else if (isClosed) {
+      countClass = 'thread-count-closed'; titleClass = 'thread-title-closed'; toggleBtnText = "Resume";
+    }
+    const countSpan = element.querySelector(".thread-count");
+    const titleSpan = element.querySelector(".thread-title");
+    const creationSpan = element.querySelector(".thread-creation");
+    const toggleBtn = element.querySelector(".toggleBtn");
+    const closeBtn = element.querySelector(".closeBtn");
+    const newCountText = `(${thread.downloadedCount || 0} / ${thread.totalImages || '?'})`;
+    if (countSpan.textContent !== newCountText) countSpan.textContent = newCountText;
+    if (!countSpan.classList.contains(countClass)) countSpan.className = `thread-count ${countClass}`;
+    const newTitleText = `${thread.title} (${thread.id})`;
+    if (titleSpan.textContent !== newTitleText) titleSpan.textContent = newTitleText;
+    if (!titleSpan.classList.contains(titleClass)) titleSpan.className = `thread-title ${titleClass}`;
+    const newCreationText = `Created: ${formatDate(thread.time)}`;
+    if (creationSpan.textContent !== newCreationText) creationSpan.textContent = newCreationText;
+    if (toggleBtn.textContent !== toggleBtnText) toggleBtn.textContent = toggleBtnText;
+    toggleBtn.disabled = isClosed;
+    const newCloseBtnText = isClosed ? "Re-open" : "Close";
+    if (closeBtn.textContent !== newCloseBtnText) closeBtn.textContent = newCloseBtnText;
   }
 
-/**
- * Intelligently updates the list of threads in the DOM.
- * This version stores the latest state of each thread on its DOM element,
- * allowing event listeners to perform optimistic updates without having stale data.
- */
-function updateThreadsList(threads) {
-    if (!threads) {
-        threadsDiv.innerHTML = '';
-        threadElements.clear();
-        return;
+  function updateThreadsList(threads, hideClosed = false) {
+  if (!threads) {
+    threadsDiv.innerHTML = '';
+    threadElements.clear();
+    return;
+  }
+
+  const displayThreads = hideClosed ? threads.filter(t => !t.closed && !t.error) : threads;
+
+  const sortedThreads = displayThreads.sort((a, b) => {
+    const pA = getThreadSortPriority(a), pB = getThreadSortPriority(b);
+    return pA !== pB ? pA - pB : (b.time || 0) - (a.time || 0);
+  });
+
+  const desiredIds = new Set(sortedThreads.map(t => t.id));
+
+  for (const [id, element] of threadElements.entries()) {
+    if (!desiredIds.has(id)) {
+      element.remove();
+      threadElements.delete(id);
     }
-    const sortedThreads = threads.sort((a, b) => {
-        const pA = getThreadSortPriority(a),
-            pB = getThreadSortPriority(b);
-        return pA !== pB ? pA - pB : (b.time || 0) - (a.time || 0);
-    });
-    const desiredIds = new Set(sortedThreads.map(t => t.id));
+  }
 
-    // Remove thread elements that are no longer in the list
-    for (const [id, element] of threadElements.entries()) {
-        if (!desiredIds.has(id)) {
-            element.remove();
-            threadElements.delete(id);
-        }
+  sortedThreads.forEach(thread => {
+    let element = threadElements.get(thread.id);
+    if (element) {
+      updateThreadElement(element, thread);
+    } else {
+      element = renderThread(thread);
+      attachButtonListeners(element);
+      threadElements.set(thread.id, element);
     }
+    element.dataset.threadState = JSON.stringify(thread);
+  });
 
-    // Add new elements or update existing ones
-    sortedThreads.forEach(thread => {
-        let element = threadElements.get(thread.id);
-        if (element) {
-            updateThreadElement(element, thread);
-        } else {
-            element = renderThread(thread);
-            attachButtonListeners(element); // Listeners are only attached once
-            threadElements.set(thread.id, element);
-        }
-        // ALWAYS update the element's dataset with the latest thread state
-        element.dataset.threadState = JSON.stringify(thread);
-    });
+  // Re-append to ensure correct order
+  sortedThreads.forEach(thread => {
+    threadsDiv.appendChild(threadElements.get(thread.id));
+  });
 
-    // Re-order all elements in the DOM according to the new sort order
-    let hasActive = false,
-        hasInactive = false;
-    sortedThreads.forEach(thread => {
-        if (getThreadSortPriority(thread) === 0) hasActive = true;
-        else if (getThreadSortPriority(thread) < 3) hasInactive = true;
-        threadsDiv.appendChild(threadElements.get(thread.id));
-    });
+  let hasActive = false, hasInactive = false;
+  sortedThreads.forEach(thread => {
+    if (getThreadSortPriority(thread) === 0) hasActive = true;
+    else if (getThreadSortPriority(thread) < 3) hasInactive = true;
+  });
 
-    // Manage the visual separator between active and inactive threads
-    if (hasActive && hasInactive) {
-        if (!separatorElement || !separatorElement.parentElement) {
-            separatorElement = document.createElement("hr");
-            separatorElement.className = "thread-separator";
-        }
-        const firstInactiveThread = sortedThreads.find(t => getThreadSortPriority(t) > 0);
-        if (firstInactiveThread) {
-            const firstInactiveElement = threadElements.get(firstInactiveThread.id);
-            if (firstInactiveElement) {
-                threadsDiv.insertBefore(separatorElement, firstInactiveElement);
-            }
-        }
-    } else if (separatorElement && separatorElement.parentElement) {
-        separatorElement.remove();
-        separatorElement = null;
+  if (hasActive && hasInactive) {
+    if (!separatorElement || !separatorElement.parentElement) {
+      separatorElement = document.createElement("hr");
+      separatorElement.className = "thread-separator";
     }
+    const firstInactiveThread = sortedThreads.find(t => getThreadSortPriority(t) > 0);
+    if (firstInactiveThread) {
+      const firstInactiveElement = threadElements.get(firstInactiveThread.id);
+      if (firstInactiveElement) {
+        threadsDiv.insertBefore(separatorElement, firstInactiveElement);
+      }
+    }
+  } else if (separatorElement && separatorElement.parentElement) {
+    separatorElement.remove();
+    separatorElement = null;
+  }
 }
 
-/**
- * Attaches event listeners to the buttons within a single thread element.
- * These listeners read thread state from the DOM to perform optimistic updates,
- * ensuring the UI is immediately responsive to user actions.
- */
-function attachButtonListeners(div) {
+  function attachButtonListeners(div) {
     const toggleBtn = div.querySelector(".toggleBtn");
     const closeBtn = div.querySelector(".closeBtn");
     const removeBtn = div.querySelector(".removeBtn");
     const forgetBtn = div.querySelector(".forgetBtn");
-
     toggleBtn?.addEventListener("click", () => {
-        const threadElement = toggleBtn.closest('.thread');
-        const thread = JSON.parse(threadElement.dataset.threadState);
-
-        toggleBtn.disabled = true;
-        // Optimistically update the UI and the stored state
-        const optimisticThread = { ...thread, active: !thread.active, error: false };
-        updateThreadElement(threadElement, optimisticThread);
-        threadElement.dataset.threadState = JSON.stringify(optimisticThread);
-
-        chrome.runtime.sendMessage({ type: "toggleThread", threadId: thread.id });
+      const threadElement = toggleBtn.closest('.thread');
+      const thread = JSON.parse(threadElement.dataset.threadState);
+      toggleBtn.disabled = true;
+      const optimisticThread = { ...thread, active: !thread.active, error: false };
+      updateThreadElement(threadElement, optimisticThread);
+      threadElement.dataset.threadState = JSON.stringify(optimisticThread);
+      chrome.runtime.sendMessage({ type: "toggleThread", threadId: thread.id });
     });
-
     closeBtn?.addEventListener("click", () => {
-        if (closeBtn.disabled) return;
-        const threadElement = closeBtn.closest('.thread');
-        const thread = JSON.parse(threadElement.dataset.threadState);
-
-        closeBtn.disabled = true;
-        // Optimistically update the UI and the stored state
-        const optimisticThread = { ...thread, closed: !thread.closed, active: false };
-        updateThreadElement(threadElement, optimisticThread);
-        threadElement.dataset.threadState = JSON.stringify(optimisticThread);
-
-        chrome.runtime.sendMessage({ type: "closeThread", threadId: thread.id });
+      if (closeBtn.disabled) return;
+      const threadElement = closeBtn.closest('.thread');
+      const thread = JSON.parse(threadElement.dataset.threadState);
+      closeBtn.disabled = true;
+      const optimisticThread = { ...thread, closed: !thread.closed, active: false };
+      updateThreadElement(threadElement, optimisticThread);
+      threadElement.dataset.threadState = JSON.stringify(optimisticThread);
+      chrome.runtime.sendMessage({ type: "closeThread", threadId: thread.id });
     });
-
     removeBtn?.addEventListener("click", () => {
-        const threadElement = removeBtn.closest('.thread');
-        const thread = JSON.parse(threadElement.dataset.threadState);
-
-        removeBtn.disabled = true;
-        // Optimistically remove the element with a fade-out animation
-        threadElement.style.transition = 'opacity 0.3s ease';
-        threadElement.style.opacity = '0';
-        setTimeout(() => threadElement.remove(), 300);
-        threadElements.delete(thread.id);
-        chrome.runtime.sendMessage({ type: "removeThread", threadId: thread.id });
+      const threadElement = removeBtn.closest('.thread');
+      const thread = JSON.parse(threadElement.dataset.threadState);
+      removeBtn.disabled = true;
+      threadElement.style.transition = 'opacity 0.3s ease';
+      threadElement.style.opacity = '0';
+      setTimeout(() => threadElement.remove(), 300);
+      threadElements.delete(thread.id);
+      chrome.runtime.sendMessage({ type: "removeThread", threadId: thread.id });
     });
-
     forgetBtn?.addEventListener("click", () => {
-        const threadElement = forgetBtn.closest('.thread');
-        const thread = JSON.parse(threadElement.dataset.threadState);
-
-        if (confirm(`Forget download history for thread "${thread.title}" (${thread.id})? This will reset its downloaded count and allow re-downloading.`)) {
-            forgetBtn.disabled = true;
-            // Optimistically update the download count in the UI
-            const countSpan = div.querySelector('.thread-count');
-            if (countSpan) {
-                countSpan.textContent = `(0 / ${thread.totalImages || '?'})`;
-            }
-            chrome.runtime.sendMessage({ type: "forgetThreadDownloads", threadId: thread.id });
+      const threadElement = forgetBtn.closest('.thread');
+      const thread = JSON.parse(threadElement.dataset.threadState);
+      if (confirm(`Forget download history for thread "${thread.title}" (${thread.id})? This will reset its downloaded count and allow re-downloading.`)) {
+        forgetBtn.disabled = true;
+        const countSpan = div.querySelector('.thread-count');
+        if (countSpan) {
+          countSpan.textContent = `(0 / ${thread.totalImages || '?'})`;
         }
+        chrome.runtime.sendMessage({ type: "forgetThreadDownloads", threadId: thread.id });
+      }
     });
+  }
+
+  function updateUI(status) {
+  if (!status) {
+    setButtonsDisabled(true);
+    return;
+  }
+  setButtonsDisabled(false);
+  const activeThreads = status.watchedThreads.filter(t => t.active && !t.closed && !t.error);
+  const pausedThreads = status.watchedThreads.filter(t => !t.active && !t.closed && !t.error);
+  pauseAllBtn.disabled = activeThreads.length === 0;
+  resumeAllBtn.disabled = pausedThreads.length === 0;
+  updateTimer(status.nextManageThreads, activeThreads.length, status.maxConcurrentThreads || 5);
+  maxThreadsInput.value = status.maxConcurrentThreads || 5;
+
+  // CRITICAL FIX: Read the state directly from the checkbox on the page,
+  // making the UI the single source of truth and ignoring the flickering
+  // value that might be coming from the background status object.
+  updateThreadsList(status.watchedThreads, hideClosedToggle.checked);
+
+  renderWatchJobs(status.watchJobs || []);
+  renderBannedUsernames(status.bannedUsernames || []);
 }
 
-function updateUI(status) {
-    if (!status) {
-        setButtonsDisabled(true);
-        return;
-    }
-    setButtonsDisabled(false);
-    const activeThreads = status.watchedThreads.filter(t => t.active && !t.closed && !t.error);
-    const pausedThreads = status.watchedThreads.filter(t => !t.active && !t.closed && !t.error);
-    pauseAllBtn.disabled = activeThreads.length === 0;
-    resumeAllBtn.disabled = pausedThreads.length === 0;
-    updateTimer(status.nextManageThreads, activeThreads.length, status.maxConcurrentThreads || 5);
-    maxThreadsInput.value = status.maxConcurrentThreads || 5;
-    
-    // REMOVE these checkbox updates completely:
-    // The checkboxes will only be set on initial load and when settings actually change
-    
-    updateThreadsList(status.watchedThreads);
-    renderWatchJobs(status.watchJobs || []);
-    renderBannedUsernames(status.bannedUsernames || []);
-}
+//updateUI function closed here
 
-  // --- Event Listeners ---
-  window.addEventListener('focus', requestStatusUpdate);
-
-historyToggle.addEventListener("change", () => {
+  historyToggle.addEventListener("change", () => {
     const isChecked = historyToggle.checked;
     pendingCheckboxUpdates.add('historyToggle');
     chrome.runtime.sendMessage({ type: "updateHistorySetting", value: isChecked }, (response) => {
-        pendingCheckboxUpdates.delete('historyToggle');
-        if (!response?.success) {
-            // Revert on failure
-            historyToggle.checked = !isChecked;
-            appendLog("Failed to update history setting.", "error");
-        }
+      pendingCheckboxUpdates.delete('historyToggle');
+      if (!response?.success) {
+        historyToggle.checked = !isChecked;
+        appendLog("Failed to update history setting.", "error");
+      }
     });
-});
+  });
 
-
-hideDownloadIconCheckbox.addEventListener("change", () => {
+  hideDownloadIconCheckbox.addEventListener("change", () => {
     const isChecked = hideDownloadIconCheckbox.checked;
     pendingCheckboxUpdates.add('hideDownloadIcon');
     chrome.runtime.sendMessage({ type: "updateHideIconSetting", value: isChecked }, (response) => {
-        pendingCheckboxUpdates.delete('hideDownloadIcon');
-        if (!response?.success) {
-            // Revert on failure
-            hideDownloadIconCheckbox.checked = !isChecked;
-            appendLog("Failed to update hide download icon setting.", "error");
-        }
+      pendingCheckboxUpdates.delete('hideDownloadIcon');
+      if (!response?.success) {
+        hideDownloadIconCheckbox.checked = !isChecked;
+        appendLog("Failed to update hide download icon setting.", "error");
+      }
     });
-});
+  });
 
-prependParentNameToggle.addEventListener("change", () => {
+  prependParentNameToggle.addEventListener("change", () => {
     const isChecked = prependParentNameToggle.checked;
     pendingCheckboxUpdates.add('prependParentNameToggle');
     chrome.runtime.sendMessage({ type: "updatePrependParentNameSetting", value: isChecked }, (response) => {
-        pendingCheckboxUpdates.delete('prependParentNameToggle');
-        if (!response?.success) {
-            // Revert on failure
-            prependParentNameToggle.checked = !isChecked;
-            appendLog("Failed to update prepend parent name setting.", "error");
-        }
+      pendingCheckboxUpdates.delete('prependParentNameToggle');
+      if (!response?.success) {
+        prependParentNameToggle.checked = !isChecked;
+        appendLog("Failed to update prepend parent name setting.", "error");
+      }
     });
+  });
+  
+  hideClosedToggle.addEventListener("change", () => {
+  const isChecked = hideClosedToggle.checked;
+  
+  chrome.runtime.sendMessage({ type: "updateHideClosedSetting", value: isChecked }, (response) => {
+    if (response?.success) {
+      // The setting was saved. Now, tell the UI to re-render the list
+      // with the new setting applied.
+      requestStatusUpdate();
+    } else {
+      // If the background script fails for some reason, revert the click.
+      hideClosedToggle.checked = !isChecked;
+      appendLog("Failed to update 'Hide Closed' setting.", "error");
+    }
+  });
 });
 
-  // Other listeners (addWatchJobBtn, etc.) remain the same
-	addWatchJobBtn.addEventListener("click", () => {
-      const searchTerm = searchTermInput.value.trim();
-      const board = boardInput.value.trim();
-      if (!board || !searchTerm) {
-          appendLog("Board and Search Term are required.", "error");
-          return;
+  addWatchJobBtn.addEventListener("click", () => {
+    const searchTerm = searchTermInput.value.trim();
+    const board = boardInput.value.trim();
+    if (!board || !searchTerm) {
+      appendLog("Board and Search Term are required.", "error");
+      return;
+    }
+    addToHistory(BOARD_HISTORY_KEY, board);
+    addToHistory(SEARCH_TERM_HISTORY_KEY, searchTerm);
+    addWatchJobBtn.disabled = true;
+    chrome.runtime.sendMessage({ type: "addWatchJob", board, searchTerm }, (response) => {
+      if (!response?.success) {
+        appendLog(`Failed to add watch job.`, "error");
       }
-	  addToHistory(BOARD_HISTORY_KEY, board);
-      addToHistory(SEARCH_TERM_HISTORY_KEY, searchTerm);
-	  addWatchJobBtn.disabled = true;
-      chrome.runtime.sendMessage({ type: "addWatchJob", board, searchTerm }, (response) => {
-          if (!response?.success) {
-              appendLog(`Failed to add watch job.`, "error");
-          } 
-          addWatchJobBtn.disabled = false;
-          requestStatusUpdate();
-      });
+      addWatchJobBtn.disabled = false;
+      requestStatusUpdate();
+    });
   });
 
-addThreadByIdBtn.addEventListener("click", () => {
-      const threadId = threadIdInput.value.trim();
-      const board = boardInput.value.trim();
-      if (!board || !threadId) {
-          appendLog("Board and Thread ID are required.", "error");
-          return;
-      }
-      addToHistory(BOARD_HISTORY_KEY, board);
-      addThreadByIdBtn.disabled = true;
-      chrome.runtime.sendMessage({ type: "start", board, threadId }, (response) => {
-          if (response?.success) threadIdInput.value = '';
-          addThreadByIdBtn.disabled = false;
-          requestStatusUpdate();
-      });
+  addThreadByIdBtn.addEventListener("click", () => {
+    const threadId = threadIdInput.value.trim();
+    const board = boardInput.value.trim();
+    if (!board || !threadId) {
+      appendLog("Board and Thread ID are required.", "error");
+      return;
+    }
+    addToHistory(BOARD_HISTORY_KEY, board);
+    addThreadByIdBtn.disabled = true;
+    chrome.runtime.sendMessage({ type: "start", board, threadId }, (response) => {
+      if (response?.success) threadIdInput.value = '';
+      addThreadByIdBtn.disabled = false;
+      requestStatusUpdate();
+    });
   });
 
   pauseAllBtn.addEventListener("click", () => {
-      pauseAllBtn.disabled = true;
-      chrome.runtime.sendMessage({ type: "stop" }, () => requestStatusUpdate());
+    pauseAllBtn.disabled = true;
+    chrome.runtime.sendMessage({ type: "stop" }, () => requestStatusUpdate());
   });
 
   resumeAllBtn.addEventListener("click", () => {
-      resumeAllBtn.disabled = true;
-      chrome.runtime.sendMessage({ type: "resumeAll" }, () => requestStatusUpdate());
+    resumeAllBtn.disabled = true;
+    chrome.runtime.sendMessage({ type: "resumeAll" }, () => requestStatusUpdate());
   });
-  
+
   checkAllBtn.addEventListener("click", () => {
-      appendLog("Manually checking all watch jobs...", "info");
-      checkAllBtn.disabled = true;
-      chrome.runtime.sendMessage({ type: "checkAllWatchJobs" }, () => {
-          checkAllBtn.disabled = false;
-          requestStatusUpdate();
-      });
+    appendLog("Manually checking all watch jobs...", "info");
+    checkAllBtn.disabled = true;
+    chrome.runtime.sendMessage({ type: "checkAllWatchJobs" }, () => {
+      checkAllBtn.disabled = false;
+      requestStatusUpdate();
+    });
   });
 
   modeToggleBtn.addEventListener("click", () => {
-      darkMode = !darkMode;
-      localStorage.setItem("darkMode", darkMode);
-      applyDarkMode();
+    darkMode = !darkMode;
+    localStorage.setItem("darkMode", darkMode);
+    applyDarkMode();
   });
 
   forgetAllBtn.addEventListener("click", () => {
-      if (confirm("WARNING:\nReally erase ALL download history?")) {
-          forgetAllBtn.disabled = true;
-          chrome.runtime.sendMessage({ type: "forgetAllDownloads" }, () => requestStatusUpdate());
-      }
+    if (confirm("WARNING:\nReally erase ALL download history?")) {
+      forgetAllBtn.disabled = true;
+      chrome.runtime.sendMessage({ type: "forgetAllDownloads" }, () => requestStatusUpdate());
+    }
   });
 
   removeAllBtn.addEventListener("click", () => {
-      if (confirm("WARNING:\nReally remove ALL threads?")) {
-          removeAllBtn.disabled = true;
-          chrome.runtime.sendMessage({ type: "removeAllThreads" }, () => requestStatusUpdate());
-      }
+    if (confirm("WARNING:\nReally remove ALL threads?")) {
+      removeAllBtn.disabled = true;
+      chrome.runtime.sendMessage({ type: "removeAllThreads" }, () => requestStatusUpdate());
+    }
   });
 
-syncCountsBtn.addEventListener("click", () => {
+  syncCountsBtn.addEventListener("click", () => {
     syncCountsBtn.disabled = true;
-    chrome.runtime.sendMessage({ type: "syncThreadCounts" }, (response) => {
-        syncCountsBtn.disabled = false;  // This is missing!
+    chrome.runtime.sendMessage({ type: "syncThreadCounts" }, () => {
+        syncCountsBtn.disabled = false;
         requestStatusUpdate();
     });
-});
+  });
 
   addBanBtn.addEventListener("click", () => {
-      const usernameToBan = banUsernameInput.value.trim();
-      if (!usernameToBan) return;
-      addBanBtn.disabled = true;
-      chrome.runtime.sendMessage({ type: "addBannedUsername", username: usernameToBan }, (response) => {
-          if (response?.success) banUsernameInput.value = '';
-          else appendLog(`Failed to add ban for "${usernameToBan}".`, "warning");
-          requestStatusUpdate();
-          addBanBtn.disabled = false;
-      });
+    const usernameToBan = banUsernameInput.value.trim();
+    if (!usernameToBan) return;
+    addBanBtn.disabled = true;
+    chrome.runtime.sendMessage({ type: "addBannedUsername", username: usernameToBan }, (response) => {
+      if (response?.success) banUsernameInput.value = '';
+      else appendLog(`Failed to add ban for "${usernameToBan}".`, "warning");
+      requestStatusUpdate();
+      addBanBtn.disabled = false;
+    });
   });
-  
+
   maxThreadsInput.addEventListener("change", () => {
-      const newValue = parseInt(maxThreadsInput.value, 10);
-      if (newValue >= 1 && newValue <= 20) {
-          chrome.runtime.sendMessage({ type: "updateMaxThreads", value: newValue });
-      } else {
-          appendLog("Invalid max threads value (must be 1-20).", "error");
-          requestStatusUpdate(); 
-      }
+    const newValue = parseInt(maxThreadsInput.value, 10);
+    if (newValue >= 1 && newValue <= 20) {
+      chrome.runtime.sendMessage({ type: "updateMaxThreads", value: newValue });
+    } else {
+      appendLog("Invalid max threads value (must be 1-20).", "error");
+      requestStatusUpdate();
+    }
   });
 
   banUsernameInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') addBanBtn.click(); });
   banToggle.addEventListener("click", () => {
-      isBanSectionCollapsed = !isBanSectionCollapsed;
-      localStorage.setItem("banSectionCollapsed", isBanSectionCollapsed);
-      applyBanSectionState();
+    isBanSectionCollapsed = !isBanSectionCollapsed;
+    localStorage.setItem("banSectionCollapsed", isBanSectionCollapsed);
+    applyBanSectionState();
   });
   downloadPathInput.addEventListener("change", () => {
     chrome.runtime.sendMessage({ type: "updateDownloadPath", path: downloadPathInput.value.trim() });
   });
 
-  // --- Background Message Handling ---
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      if (message.type === "log") {
-          if (!sender.tab) appendLog(message.message, message.logType || "info");
-      } else if (message.type === "updateStatus") {
-          updateUI(message);
-      }
-      sendResponse(true);
-      return true;
+    if (message.type === "log") {
+      if (!sender.tab) appendLog(message.message, message.logType || "info");
+    } else if (message.type === "updateStatus") {
+      updateUI(message);
+    } else if (message.type === "keepAlive") {
+      requestStatusUpdate();
+    }
+    sendResponse(true);
+    return true;
   });
 });
