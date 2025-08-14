@@ -26,11 +26,12 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 
 ## CHANGELOG:
 **Next Update**  
-・ $\color{Yellow}{\textsf{Fixed}}$: Getting HTTP 407 errors if the muncher window is out of focus for too long while using a VPN.
+・ $\color{Purple}{\textsf{Improved}}$ some UI elements spacing.  
+・ $\color{Yellow}{\textsf{Fixed}}$: Getting HTTP 407 errors if the muncher window is out of focus for too long while using a VPN.  
 
 **2025-08-14f**  
 ・ $\color{Lime}{\textsf{Added}}$ a "Hide Inactive" checkbox. Hides closed or errored threads from the list.  
-・ $\color{Purple}{\textsf{Changed}}$ some log text colors.  
+・ $\color{Purple}{\textsf{Improved}}$ some log text colors.  
 ・ $\color{Yellow}{\textsf{Fixed}}$: When not in focus, muncher can time out.  
 ・ $\color{Yellow}{\textsf{Fixed}}$: UI can disappear if unfocused and needs a manual refocus.  
 ・ $\color{Yellow}{\textsf{Fixed}}$: Stuck timer never closing a thread.  
@@ -50,15 +51,16 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 ・ $\color{Lime}{\textsf{Added}}$ history dropdown menus for convenience.  
 ・ $\color{Lime}{\textsf{Added}}$ a UI element to change max concurrent threads.  
 ・ $\color{Lime}{\textsf{Added}}$ the ability to ban usernames.  
+・ $\color{Purple}{\textsf{Improved}}$ rendering and fixed weird flashing buttons.  
+・ $\color{Purple}{\textsf{Improved}}$ download delays to adapt to max concurrent threads.  
 ・ $\color{Yellow}{\textsf{Fixed}}$:  Watch Jobs don't pause processing when muncher window is closed.  
 ・ $\color{Yellow}{\textsf{Fixed}}$: When adding a new Watch Job, downloads wait for the Next Update timer to run out.  
 ・ $\color{Yellow}{\textsf{Fixed}}$: Next Update timer doesn't show up until the window is manually refocused.  
-・ $\color{Purple}{\textsf{Improved}}$ rendering and fixed weird flashing buttons.  
-・ $\color{Purple}{\textsf{Improved}}$ download delays to adapt to max concurrent threads.  
 ・ $\color{Red}{\textsf{New Issue}}$: Some UI elements don't update until the window is manually refocused.  
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
