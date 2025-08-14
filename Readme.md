@@ -61,7 +61,7 @@ In background.js, you might want to adjust these values:
 
 ✱ **const MANAGE_THREADS_INTERVAL = 1;**  
     Default value is 1 minute.  
-    Time between updating threads and performing checks.  
+    Time between performing checks.  
 
 ✱ **const STUCK_TIMER = 5 * 60 * 1000;**  
     Default value is 5 minutes.      
@@ -74,6 +74,7 @@ In background.js, you might want to adjust these values:
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
