@@ -27,7 +27,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 
 ## CHANGELOG:
 **Next Update**  
-・ $\color{Purple}{\textsf{Improved}}$ some UI elements' spacing.  
+・ $\color{Purple}{\textsf{Improved}}$ spacing of some UI elements.  
 ・ $\color{Yellow}{\textsf{Fixed}}$: Getting HTTP 407 errors if left unfocused for too long while using a VPN.  
 ・ $\color{Yellow}{\textsf{Fixed}}$: Muncher stops checking for new threads if left unfocused for too long.  
 
@@ -62,6 +62,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
