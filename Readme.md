@@ -20,10 +20,6 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 
 <br>
 
-## KNOWN ISSUES:
-
-<br>
-
 ## CHANGELOG:
 **2025-08-14f**  
 ・ $\color{Lime}{\textsf{Added}}$ a "Hide Inactive" checkbox. Hides closed or errored threads from the list.  
@@ -53,8 +49,6 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 ・ $\color{Purple}{\textsf{Improved}}$ rendering and fixed weird flashing buttons.  
 ・ $\color{Purple}{\textsf{Improved}}$ download delays to adapt to max concurrent threads.  
 ・ $\color{Red}{\textsf{New Issue}}$: Some UI elements don't update until the window is manually refocused.  
-
-<br>
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
