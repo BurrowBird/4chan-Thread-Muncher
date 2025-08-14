@@ -20,6 +20,11 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 
 <br>
 
+## KNOWN ISSUES:
+・ Getting HTTP error 407-ed. Window timeout/focus issue? VPN issue? Investigate.  
+
+<br>
+
 ## CHANGELOG:
 **2025-08-14f**  
 ・ $\color{Lime}{\textsf{Added}}$ a "Hide Inactive" checkbox. Hides closed or errored threads from the list.  
@@ -52,4 +57,5 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
