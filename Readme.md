@@ -27,7 +27,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 ## CHANGELOG:
 **2025-08-14f**  
 ・ $\color{Lime}{\textsf{Added}}$ a "Hide Inactive" checkbox. Hides closed or errored threads from the list.  
-・ $\color{Yellow}{\textsf{Changed}}$ some log text colors.  
+・ $\color{Purple}{\textsf{Changed}}$ some log text colors.  
 ・ $\color{Yellow}{\textsf{Fixed}}$: When not in focus, muncher can time out.  
 ・ $\color{Yellow}{\textsf{Fixed}}$: UI can disappear if unfocused and needs a manual refocus.  
 ・ $\color{Yellow}{\textsf{Fixed}}$: Stuck timer never closing a thread.  
@@ -52,8 +52,8 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 ・ $\color{Lime}{\textsf{Added}}$ the ability to ban usernames.  
 ・ $\color{Yellow}{\textsf{Fixed}}$: When adding a new Watch Job, downloads wait for the Next Update timer to run out.  
 ・ $\color{Yellow}{\textsf{Fixed}}$: Next Update timer doesn't show up until the window is manually refocused.  
-・ $\color{Yellow}{\textsf{Improved}}$ rendering and fixed weird flashing buttons.  
-・ $\color{Yellow}{\textsf{Improved}}$ download delays to adapt to max concurrent threads.  
+・ $\color{Purple}{\textsf{Improved}}$ rendering and fixed weird flashing buttons.  
+・ $\color{Purple}{\textsf{Improved}}$ download delays to adapt to max concurrent threads.  
 ・ $\color{Red}{\textsf{New Issue}}$: Some UI elements don't update until the window is manually refocused.  
 
 <br>
@@ -76,6 +76,7 @@ In background.js, you might want to adjust these values:
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
