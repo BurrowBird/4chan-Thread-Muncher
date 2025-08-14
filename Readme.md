@@ -26,10 +26,10 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 
 ## CHANGELOG:
 **Next Version (upcoming)**  
+・ Added a "Hide Inactive" checkbox. Hides closed or errored threads from the list.  
 ・ Fixed: When not in focus, muncher can time out.  
 ・ Fixed: UI can disappear if unfocused and needs a manual refocus.  
 ・ Fixed: Stuck timer never closing a thread.  
-・ Added a "Hide Inactive" checkbox. Hides closed or errored threads from the list.
 
 **2025-08-14**  
 ・ Changed some log text colors.  
@@ -86,6 +86,7 @@ In background.js, you might want to adjust these values:
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
