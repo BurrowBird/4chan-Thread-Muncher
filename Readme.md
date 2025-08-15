@@ -29,24 +29,18 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 ## CHANGELOG:
 **2025-08-15c**  
 ・ $\color{Lime}{\textsf{Added}}$ a visual indicator for time left before a thread auto-closes.  
-・ $\color{Purple}{\textsf{Improved}}$ spacing of some UI elements.  
-・ $\color{Purple}{\textsf{Improved}}$ heartbeat mechanisms to help with timing out issues.  
-
-**2025-08-14f**  
 ・ $\color{Lime}{\textsf{Added}}$ a "Hide Inactive" checkbox. Hides closed or errored threads from the list.  
-・ $\color{Purple}{\textsf{Improved}}$ some log text colors.  
-・ $\color{Yellow}{\textsf{Fixed}}$: UI can disappear if unfocused and needs a manual refocus.  
-・ $\color{Yellow}{\textsf{Fixed}}$: Stuck timer never closing a thread.  
-
-**2025-08-13g**  
 ・ $\color{Lime}{\textsf{Added}}$ a "Add PName" checkbox. Prepends name of parent folders to files. (parentname｜filename.ext)  
-・ $\color{Yellow}{\textsf{Fixed}}$: Some UI elements don't update until the window is manually refocused.  
-・ $\color{Red}{\textsf{Removed}}$ activeTab permission - no longer needed.  
-・ $\color{Red}{\textsf{Removed}}$ content-script.js - no longer needed.  
-
-**2025-08-10**  
 ・ $\color{Lime}{\textsf{Added}}$ a "Hide DL Icon" checkbox. If checked, the browser's download icon is hidden.  
 ・ $\color{Lime}{\textsf{Added}}$ a "Populate DLs" checkbox. If unchecked, downloads are auto-removed from the browser's download list.  
+・ $\color{Purple}{\textsf{Improved}}$ spacing of some UI elements.  
+・ $\color{Purple}{\textsf{Improved}}$ some log text colors.  
+・ $\color{Purple}{\textsf{Improved}}$ heartbeat mechanisms to help with timing out issues.  
+・ $\color{Yellow}{\textsf{Fixed}}$: Stuck timer never closing a thread.  
+・ $\color{Yellow}{\textsf{Fixed}}$: UI can disappear if unfocused and needs a manual refocus.  
+・ $\color{Yellow}{\textsf{Fixed}}$: Some UI elements don't update until the window is manually refocused.  
+・ $\color{Red}{\textsf{Removed}}$ content-script.js - no longer needed.  
+・ $\color{Red}{\textsf{Removed}}$ activeTab permission - no longer needed.  
 
 **2025-08-09**  
 ・ $\color{Lime}{\textsf{Added}}$ simultaneous watching of multiple searches ("board + regex").  
@@ -62,6 +56,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
