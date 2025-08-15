@@ -14,8 +14,10 @@
       --log-bg: #ffffff;
       --error-color: #f28b82; /* Red */
       --warning-color: orange; /* Orange */
+	  --paused-color: gold;
       --success-color: #81c995; /* Green */
       --info-color: #8ab4f8; /* Blue */
+	  --happy-color: gold;
       --closed-color: #808080; /* Grey */
       --accent-color: #a78bfa; /* Purple */
       --danger-hover: #d93025; /* Darker Red */
@@ -31,8 +33,10 @@
       --log-bg: #181926; /* Catppuccin Macchiato Mantle */
       --error-color: #ed8796; /* Catppuccin Macchiato Red */
       --warning-color: #ed8796; /* Catppuccin Macchiato Red */
+	  --paused-color: gold;
       --success-color: #a6da95; /* Catppuccin Macchiato Green */
       --info-color: #8aadf4; /* Catppuccin Macchiato Blue */
+	  --happy-color: gold;
       --closed-color: #6e738d; /* Catppuccin Macchiato Overlay1 */
       --accent-color: #c6a0f6; /* Catppuccin Macchiato Mauve */
       --danger-hover: #e64553; /* Lighter Red for dark mode */
@@ -337,18 +341,25 @@
     /* Status Count Styles */
     .thread-count { font-weight: bold; min-width: 70px; text-align: right; }
     .thread-count-active { color: var(--success-color); }
-    .thread-count-paused { color: var(--warning-color); }
+    .thread-count-paused { color: var(--paused-color); }
     .thread-count-error { color: var(--error-color); }
     .thread-count-closed { color: var(--closed-color); }
 
     /* Thread Title Styles */
     .thread-title { font-weight: normal; flex-shrink: 1; min-width: 100px; } /* Allow title to shrink */
     .thread-title-active { color: var(--info-color); }
-    .thread-title-paused { color: var(--warning-color); }
+    .thread-title-paused { color: var(--paused-color); }
     .thread-title-error { color: var(--error-color); }
     .thread-title-closed { color: var(--closed-color); text-decoration: line-through; }
 
     .thread-creation { font-size: 11px; opacity: 0.7; white-space: nowrap; }
+
+    .thread-timer-visual {
+        font-family: monospace;
+        letter-spacing: 2px;
+        color: var(--closed-color);
+        margin-left: 10px;
+    }
 
     .action-buttons {
       display: flex;

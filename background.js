@@ -1,7 +1,8 @@
-console.log("Content script loaded.");
+console.log("Service worker script loaded.");
 
+let threadProgressTimers = new Map();
+let isResuming = false;
 let keepAliveAlarmName = 'keepAlivePing';
-let isRunning = false;
 let watchedThreads = [];
 let downloadedImages = new Map();
 let watchJobs = [];
@@ -9,8 +10,6 @@ let bannedUsernames = new Set();
 let activeDownloads = new Map();
 let downloadLocks = new Map();
 let windowId = null;
-let threadProgressTimers = new Map();
-let isResuming = false;
 let lastResumeTime = 0;
 let lastLogMessage = null;
 let isInitialized = false;
@@ -31,6 +30,80 @@ const MAX_RETRIES = 3;
 const DOWNLOAD_TIMEOUT_MS = 15000;
 const requestQueue = [];
 const API_REQUEST_INTERVAL = 1100;
+
+
+// Saves the current state of threadProgressTimers to local storage.
+function updateTimersInStorage() {
+    const storableTimers = Array.from(threadProgressTimers.entries());
+    chrome.storage.local.set({ threadProgressTimers: storableTimers }, () => {
+        if (chrome.runtime.lastError) {
+            log(`Error saving thread progress timers to storage: ${chrome.runtime.lastError.message}`, "error");
+        }
+    });
+}
+
+
+// Helper function to determine if any thread is active. This is our new single source of truth.
+function isAnyThreadActive() {
+    return watchedThreads.some(t => t.active && !t.closed);
+}
+
+
+async function fetchWithRetry(url) {
+  for (let i = 0; i < MAX_RETRIES; i++) {
+    try {
+      // 1. Create a new URL object to easily add a cache-busting parameter.
+      const uniqueUrl = new URL(url);
+      
+      // 2. Add a unique query parameter to the URL. This is the most effective
+      //    way to ensure no proxy/cache serves a stale response.
+      uniqueUrl.searchParams.append('_', Date.now());
+
+      // 3. Perform the fetch with headers that explicitly forbid caching.
+      const response = await fetch(uniqueUrl.toString(), {
+        method: 'GET',
+        // 4. `no-store` is the strongest directive, telling the browser and proxies
+        //    not to store any part of the request or response.
+        cache: 'no-store', 
+        headers: {
+          // 5. Explicitly set headers for good measure, covering older systems.
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache', // For HTTP/1.0 compatibility
+          'Expires': '0',
+        },
+      });
+
+      if (!response.ok) {
+        // We can now get the specific status code, which is more informative.
+        const errorText = `API fetch failed with status: ${response.status} ${response.statusText}`;
+        log(`${errorText} for ${url}`, "warning");
+        
+        // If the proxy error persists, we throw to retry.
+        if (response.status === 407) {
+           throw new Error("Proxy Authentication Required");
+        }
+        
+        // For other errors, also throw to retry as before.
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data; // Success!
+
+    } catch (error) {
+      //log(`API fetch attempt ${i + 1}/${MAX_RETRIES} for ${url} failed: ${error.message}`, "warning");
+      
+      if (i === MAX_RETRIES - 1) {
+        log(`Max retries reached for ${url}, giving up fetch`, "error");
+        throw error;
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_MS * (i + 1)));
+    }
+  }
+  throw new Error(`API fetch failed permanently for ${url} after ${MAX_RETRIES} retries.`);
+}
+
 
 async function processQueue() {
     if (requestQueue.length === 0) {
@@ -106,24 +179,6 @@ function log(message, type = "info") {
     }
 }
 
-async function fetchWithRetry(url) {
-    for (let i = 0; i < MAX_RETRIES; i++) {
-        if (!isRunning && !isInitialized) throw new Error("Process stopped during fetch");
-        try {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`HTTP error ${response.status}`);
-            return await response.json();
-        } catch (error) {
-            log(`Fetch failed for ${url}: ${error.message}. Retry ${i + 1}/${MAX_RETRIES}`, "warning");
-            if (i === MAX_RETRIES - 1) {
-                log(`Max retries reached for ${url}, giving up fetch`, "error");
-                throw error;
-            }
-            await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_MS * (i + 1)));
-        }
-    }
-    throw new Error(`Fetch failed for ${url} after ${MAX_RETRIES} retries.`);
-}
 
 function getFullPath(threadId, username, filename) {
     const sanitizedUsername = username ? username.replace(/[^a-zA-Z0-9_.-]/g, "_") : "Anonymous";
@@ -195,7 +250,9 @@ async function downloadImage(url, threadId, username) {
             };
         }
         for (let i = 0; i < MAX_RETRIES; i++) {
-            if (!isRunning || !watchedThreads.find(t => t.id === threadId)?.active) {
+            // CHANGED: Check against the specific thread, not a global flag.
+            const currentThreadState = watchedThreads.find(t => t.id === threadId);
+            if (!currentThreadState || !currentThreadState.active) {
                 throw new Error("Process or thread stopped before download attempt");
             }
             let downloadId = null;
@@ -304,7 +361,8 @@ async function downloadImage(url, threadId, username) {
                     log(`Max retries reached for ${url}, marking as failed for this run`, "error");
                 } else {
                     await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_MS * (i + 1)));
-                    if (!isRunning || !watchedThreads.find(t => t.id === threadId)?.active) {
+                    const currentThreadStateRetry = watchedThreads.find(t => t.id === threadId);
+                    if (!currentThreadStateRetry || !currentThreadStateRetry.active) {
                         throw new Error("Thread or process inactive during retry wait");
                     }
                 }
@@ -396,12 +454,13 @@ function updateUI() {
                 const nextTime = alarm?.scheduledTime || null;
                 chrome.runtime.sendMessage({
                     type: "updateStatus",
-                    isRunning: watchedThreads.some(t => t.active && !t.closed),
+                    isRunning: isAnyThreadActive(), // CHANGED: Use the helper function
                     watchedThreads: watchedThreads.map(thread => ({
                         ...thread,
                         skippedImages: Array.from(thread.skippedImages || new Set()),
                         downloadedCount: thread.downloadedCount || 0,
-                        totalImages: thread.totalImages || 0
+                        totalImages: thread.totalImages || 0,
+                        timerStartTime: threadProgressTimers.get(thread.id) || null
                     })),
                     trackedDownloads: downloadedImages.size,
                     watchJobs: watchJobs,
@@ -481,6 +540,7 @@ async function processThread(thread) {
 					thread.active = false;
 					thread.error = false;
 					threadProgressTimers.delete(thread.id);
+					updateTimersInStorage();
 					updateWatchedThreads();
 					return;
 				}
@@ -496,16 +556,7 @@ async function processThread(thread) {
             log(`Syncing count for thread "${thread.title}" (${thread.id}): ${thread.downloadedCount} -> ${newCount}`, "info");
             thread.downloadedCount = newCount;
         }
-        if (thread.downloadedCount < thread.totalImages) {
-            threadProgressTimers.delete(thread.id);
-        } else if (thread.totalImages > 0) {
-            if (!threadProgressTimers.has(thread.id)) {
-                log(`Thread "${thread.title}" (${thread.id}) appears complete (${thread.downloadedCount}/${thread.totalImages}). Starting potential close timer.`, "info");
-                threadProgressTimers.set(thread.id, Date.now());
-            }
-        } else {
-            threadProgressTimers.delete(thread.id);
-        }
+		
         updateWatchedThreads();
         debouncedUpdateUI();
         if (thread.downloadedCount < thread.totalImages) {
@@ -513,7 +564,7 @@ async function processThread(thread) {
             const activeThreadCount = Math.max(1, watchedThreads.filter(t => t.active && !t.closed).length);
             const dynamicDelay = Math.min(2000, 200 * activeThreadCount);
             for (const post of imagePosts) {
-                if (!thread.active || !isRunning) {
+                if (!thread.active) {
                     break;
                 }
                 const imageUrl = `https://i.4cdn.org/${thread.board}/${post.tim}${post.ext}`;
@@ -531,12 +582,9 @@ async function processThread(thread) {
 						debouncedUpdateUI();
 					}
 				}
-                if (!thread.active || !isRunning) break;
+                if (!thread.active) break;
             }
-            log(`processThread: Finished processing run for thread "${thread.title}" (${thread.id}). ${downloadedInRun} new images downloaded. Current state: ${thread.downloadedCount}/${thread.totalImages}`, "info");
-            if (thread.active && thread.downloadedCount >= thread.totalImages && thread.totalImages > 0) {
-                threadProgressTimers.set(thread.id, Date.now());
-            }
+            log(`Finished processing run for thread "${thread.title}" (${thread.id}). ${downloadedInRun} new images downloaded. Current state: ${thread.downloadedCount}/${thread.totalImages}`, "info");
         } else if (thread.totalImages > 0) {} else {
             log(`No images found in thread "${thread.title}" (${thread.id}).`, "info");
         }
@@ -558,67 +606,86 @@ async function manageThreads() {
         return;
     }
 
-    // --- NEW LOGIC: Identify and start timers for completed threads first ---
-    const allActiveThreads = watchedThreads.filter(t => t.active && !t.error && !t.closed);
-    for (const thread of allActiveThreads) {
-        // If a thread is complete and doesn't have a timer, start one.
-        if (thread.downloadedCount >= thread.totalImages && thread.totalImages > 0 && !threadProgressTimers.has(thread.id)) {
-            log(`Thread "${thread.title}" (${thread.id}) appears complete (${thread.downloadedCount}/${thread.totalImages}). Starting potential close timer.`, "info");
-            threadProgressTimers.set(thread.id, Date.now());
+    let newTimers = new Map();
+    const currentTime = Date.now(); 
+
+    const completeThreads = watchedThreads.filter(thread => 
+        !thread.closed && !thread.error && thread.downloadedCount >= thread.totalImages && thread.totalImages > 0
+    );
+
+    const seenCompleteIds = new Set();
+    for (const thread of completeThreads) {
+        if (seenCompleteIds.has(thread.id)) {
+            continue; 
         }
-        // If a thread becomes incomplete again (e.g., manual 'forget'), remove its timer.
-        else if (thread.downloadedCount < thread.totalImages && threadProgressTimers.has(thread.id)) {
-            threadProgressTimers.delete(thread.id);
+        seenCompleteIds.add(thread.id);
+
+        const existingStartTime = threadProgressTimers.get(thread.id);
+        if (existingStartTime) {
+            newTimers.set(thread.id, existingStartTime);
+        } else {
+            log(`Thread "${thread.title}" (${thread.id}) appears complete (${thread.downloadedCount}/${thread.totalImages}). Starting potential close timer.`, "info");
+            newTimers.set(thread.id, currentTime);
         }
     }
 
-    const processCandidates = allActiveThreads;
-    const finishedCandidates = watchedThreads.filter(t => !t.active && !t.closed && !t.error && t.downloadedCount >= t.totalImages && t.totalImages > 0);
-    const stuckCandidates = allActiveThreads.filter(t => threadProgressTimers.has(t.id)); // Simplified definition
+    threadProgressTimers = newTimers;
+    updateTimersInStorage();
 
-    log(`manageThreads: Processing ${processCandidates.length} active, monitoring ${stuckCandidates.length} potentially stuck.`, "debug");
+    const processCandidates = watchedThreads.filter(t => t.active && !t.error && !t.closed);
+    const threadsWithTimers = watchedThreads.filter(t => threadProgressTimers.has(t.id));
+
+    log(`Processing ${processCandidates.filter(p => (p.downloadedCount < p.totalImages || p.totalImages === 0)).length} active, monitoring ${threadsWithTimers.length} potentially finished threads.`, "debug");
     const now = Date.now();
 
-    for (const thread of [...stuckCandidates, ...finishedCandidates]) {
+    // Check all threads that have a timer to see if they should be closed.
+    for (const thread of threadsWithTimers) {
         const timerStartTime = threadProgressTimers.get(thread.id);
         if (timerStartTime && (now - timerStartTime >= STUCK_TIMER)) {
             log(`Thread "${thread.title}" (${thread.id}) timer expired. Checking for new images...`, "info");
             try {
                 const data = await scheduleRequest(() => fetchWithRetry(thread.url));
                 const newImageCount = data.posts.filter(post => post.tim && post.ext).length;
+
+                // Condition 1: Thread is officially closed/archived by 4chan.
                 if (data.posts[0].closed === 1 || data.posts[0].archived === 1) {
                     log(`Thread "${thread.title}" (${thread.id}) timer check: Thread now ${data.posts[0].closed ? 'closed' : 'archived'} on 4chan. Closing locally.`, "info");
                     thread.closed = true;
                     thread.active = false;
                     thread.error = false;
                     threadProgressTimers.delete(thread.id);
-                } else if (newImageCount > thread.totalImages) {
-                    log(`Thread "${thread.title}" (${thread.id}) timer check: Found new images (${thread.totalImages} -> ${newImageCount}). Re-activating processing.`, "info");
+					updateTimersInStorage();
+                }
+                // Condition 2: New images have appeared.
+                else if (newImageCount > thread.totalImages) {
+                    log(`Thread "${thread.title}" (${thread.id}) timer check: Found new images (${thread.totalImages} -> ${newImageCount}). Processing will resume.`, "info");
                     thread.totalImages = newImageCount;
-                    thread.active = true;
-                    thread.error = false;
-                    threadProgressTimers.delete(thread.id);
-                } else {
-					log({
+                    // The timer will be automatically removed on the next manageThreads cycle because the thread is no longer complete.
+                }
+                // Condition 3: Timer expired, no new images found. Close it.
+                else {
+                    log({
                         isStructured: true,
                         parts: [
                             { text: 'Thread "' },
                             { text: thread.title, style: 'log-filename' },
                             { text: '" (', style: 'normal' },
                             { text: thread.id, style: 'log-path' },
-                            { text: ') timer check: No new images found. Closing thread locally.', style: 'normal' },
+                            { text: ') timer expired and no new images found. Closing thread locally.', style: 'normal' },
                         ]
                     }, "info");
                     thread.closed = true;
                     thread.active = false;
                     threadProgressTimers.delete(thread.id);
+					updateTimersInStorage();
                 }
             } catch (error) {
                 log(`Failed to re-check thread "${thread.title}" (${thread.id}) state during timer check: ${error.message}. Closing thread.`, "error");
                 thread.closed = true;
                 thread.active = false;
-                thread.error = true;
+                thread.error = true; // Keep error state to indicate it closed due to a failure
                 threadProgressTimers.delete(thread.id);
+				updateTimersInStorage();
             }
             updateWatchedThreads();
             debouncedUpdateUI();
@@ -643,27 +710,28 @@ async function manageThreads() {
     }
 
     const currentActiveCount = watchedThreads.filter(t => t.active && !t.closed && !t.error).length;
-    if (currentActiveCount < MAX_CONCURRENT_THREADS && isRunning && watchJobs.length > 0) {
+    if (watchJobs.length > 0 && currentActiveCount < MAX_CONCURRENT_THREADS) {
         await checkForNewThreads();
     }
-    isRunning = watchedThreads.some(t => t.active && !t.closed);
-    chrome.storage.local.set({ isRunning });
-    if (!isRunning && watchedThreads.length > 0) {
+    
+    // REMOVED: All `isRunning` logic and storage calls.
+
+    if (!isAnyThreadActive() && watchedThreads.length > 0) {
         log("manageThreads: All watched threads are now inactive, paused, closed, or errored.", "info");
     }
     debouncedUpdateUI();
 }
 
 function setupAlarms() {
-    log("Setting up 'manageThreads' alarm.", "info");
+    //log("Setting up 'manageThreads' alarm.", "info");
     chrome.alarms.create("manageThreads", {
         delayInMinutes: 0.1,
         periodInMinutes: MANAGE_THREADS_INTERVAL
     });
 }
 chrome.alarms.create(keepAliveAlarmName, {
-        delayInMinutes: 0,
-        periodInMinutes: 1 / 12 // 5 seconds
+        delayInMinutes: 1, 
+        periodInMinutes: 1 
     });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -672,12 +740,19 @@ chrome.alarms.onAlarm.addListener((alarm) => {
             log(`Error during scheduled manageThreads execution: ${error.message}`, "error");
         });
     }
+
     if (alarm.name === keepAliveAlarmName) {
+        //log("Sending network heartbeat to keep proxy session alive...", "debug");
+        fetch(chrome.runtime.getURL('dud.txt'), { cache: 'no-store' })
+            .then(response => {
+                if (!response.ok) throw new Error('Heartbeat failed');
+                //log("Network heartbeat successful.", "debug");
+            })
+            .catch(err => log(`Network heartbeat failed: ${err.message}`, "warning"));
+
         if (windowId) {
             chrome.runtime.sendMessage({ type: "keepAlive" }, () => {
-                if (chrome.runtime.lastError) {
-                    // This is expected if the window is closed, so no need to log an error
-                }
+                if (chrome.runtime.lastError) {}
             });
         }
     }
@@ -685,8 +760,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 
 async function resumeActiveThreads() {
-    if (!isRunning) {
-        log("syncAndProcessActiveThreads: Not running, skipping", "info");
+    if (!isAnyThreadActive()) {
+        log("syncAndProcessActiveThreads: No active threads, skipping", "info");
         return;
     }
     const activeThreads = watchedThreads.filter(t => t.active && !t.closed && !t.error);
@@ -694,7 +769,7 @@ async function resumeActiveThreads() {
         log("syncAndProcessActiveThreads: No active, non-error, non-closed threads to process.", "info");
         return;
     }
-    log(`syncAndProcessActiveThreads: Checking state for ${activeThreads.length} active threads...`, "info");
+    //log(`syncAndProcessActiveThreads: Checking state for ${activeThreads.length} active threads...`, "info");
     for (const thread of activeThreads) {
         if (!thread.active || thread.closed || thread.error) continue;
         try {
@@ -706,6 +781,7 @@ async function resumeActiveThreads() {
                 thread.active = false;
                 thread.error = false;
                 threadProgressTimers.delete(thread.id);
+				updateTimersInStorage();
                 updateWatchedThreads();
                 continue;
             }
@@ -736,17 +812,11 @@ async function resumeActiveThreads() {
             const oldCount = thread.downloadedCount;
             thread.downloadedCount = Math.min(rebuiltSkippedCount, thread.totalImages);
             if (oldCount !== thread.downloadedCount || initialSkippedSize !== rebuiltSkippedCount) {
-                log(`Synced state for thread "${thread.title}" (${thread.id}): Count ${oldCount} -> ${thread.downloadedCount}, Skipped Set Size ${initialSkippedSize} -> ${rebuiltSkippedCount}, Total Images: ${thread.totalImages}`, "info");
+                //log(`Synced state for thread "${thread.title}" (${thread.id}): Count ${oldCount} -> ${thread.downloadedCount}, Skipped Set Size ${initialSkippedSize} -> ${rebuiltSkippedCount}, Total Images: ${thread.totalImages}`, "info");
             }
             thread.error = false;
             updateWatchedThreads();
-            if (thread.downloadedCount >= thread.totalImages && thread.totalImages > 0) {
-                if (!threadProgressTimers.has(thread.id)) {
-                    threadProgressTimers.set(thread.id, Date.now());
-                }
-            } else {
-                threadProgressTimers.delete(thread.id);
-            }
+			
         } catch (error) {
             log(`Failed to sync state for thread "${thread.title}" (${thread.id}) on resume: ${error.message}`, "error");
             thread.error = true;
@@ -754,22 +824,11 @@ async function resumeActiveThreads() {
             updateWatchedThreads();
         }
     }
-    log(`syncAndProcessActiveThreads: Finished state sync.`, "info");
+    //log(`syncAndProcessActiveThreads: Finished state sync.`, "info");
     debouncedUpdateUI();
     manageThreads();
 }
-chrome.runtime.onStartup.addListener(() => {
-    log("Service worker started (onStartup event).", "info");
-    chrome.storage.local.get(null, async (result) => {
-        await initializeState(result);
-        if (isRunning) {
-            log("onStartup: isRunning was true, attempting to sync/process active threads.", "info");
-            resumeActiveThreads().catch(err => log(`Resume/Sync failed after startup: ${err.message}`, "error"));
-        }
-        setupAlarms();
-        debouncedUpdateUI();
-    });
-});
+
 chrome.runtime.onInstalled.addListener(details => {
     log(`Extension ${details.reason}. Initializing...`, "info");
     setupAlarms();
@@ -851,7 +910,7 @@ async function checkForNewThreads() {
     const activeThreadCount = watchedThreads.filter(t => t.active && !t.error && !t.closed).length;
     let availableSlots = MAX_CONCURRENT_THREADS - activeThreadCount;
     if (availableSlots <= 0) return;
-    log(`Checking for new threads from ${watchJobs.length} watch jobs. Available slots for threads: ${availableSlots}`, "debug");
+    (`Checking for new threads from ${watchJobs.length} watch jobs. Available slots for threads: ${availableSlots}`, "info");
     const shuffledJobs = [...watchJobs].sort(() => 0.5 - Math.random());
     let newThreadsFound = false;
     for (const job of shuffledJobs) {
@@ -1013,11 +1072,9 @@ function stopScraping() {
         }
     });
     Array.from(activeDownloads.keys()).filter(k => k.endsWith('-processing')).forEach(k => activeDownloads.delete(k));
-    isRunning = false;
-    chrome.storage.local.set({
-        isRunning
-    });
+    
     if (changed) {
+		updateTimersInStorage();
         updateWatchedThreads();
     }
     log("All active threads paused.", "warning");
@@ -1038,23 +1095,18 @@ async function resumeAllThreads() {
         let resumedCount = 0;
         if (threadsToResume.length === 0) {
             log("Resume All: No paused, non-error, non-closed threads to resume.", "info");
-            isRunning = currentActiveCount > 0;
-            chrome.storage.local.set({
-                isRunning
-            });
             return false;
         }
-        log(`Attempting to resume up to ${availableSlots} threads initially...`, "info");
-        isRunning = true;
-        chrome.storage.local.set({
-            isRunning
-        });
+        log(`Attempting to resume up to ${availableSlots} threads.`, "info");
+        
+        // REMOVED: isRunning = true and storage call.
+
         for (const thread of threadsToResume) {
             if (availableSlots <= 0) {
                 log(`Resume All: Reached max concurrent threads (${MAX_CONCURRENT_THREADS}). Remaining threads kept paused.`, "info");
                 break;
             }
-            log(`Resuming thread "${thread.title}" (${thread.id})`, "info");
+            //log(`Resuming thread "${thread.title}" (${thread.id})`, "info");
             thread.active = true;
             thread.error = false;
             resumedCount++;
@@ -1087,6 +1139,7 @@ function toggleThread(threadId) {
         log(`Pausing thread "${thread.title}" (${threadId})`, "info");
         thread.active = false;
         threadProgressTimers.delete(thread.id);
+		updateTimersInStorage();
         activeDownloads.forEach((downloadId, key) => {
             if (key.startsWith(`${threadId}-`)) {
                 if (key.endsWith('-processing')) {
@@ -1103,26 +1156,18 @@ function toggleThread(threadId) {
                 }
             }
         });
-        isRunning = watchedThreads.some(t => t.active && !t.closed);
-        chrome.storage.local.set({
-            isRunning
-        });
     } else {
         if (thread.error) {
-            log(`Retrying errored thread "${thread.title}" (${threadId})`, "info");
+            log(`Retrying errored thread "${thread.title}" (${thread.id})`, "info");
             thread.error = false;
         }
         const activeCount = watchedThreads.filter(t => t.active && !t.error && !t.closed).length;
         if (activeCount < MAX_CONCURRENT_THREADS) {
-            log(`Resuming thread "${thread.title}" (${threadId})`, "info");
+            //log(`Resuming thread "${thread.title}" (${thread.id})`, "info");
             thread.active = true;
-            isRunning = true;
-            chrome.storage.local.set({
-                isRunning
-            });
             manageThreads();
         } else {
-            log(`Cannot activate thread "${thread.title}" (${threadId}): Maximum concurrent threads (${MAX_CONCURRENT_THREADS}) reached.`, "warning");
+            log(`Cannot activate thread "${thread.title}" (${thread.id}): Maximum concurrent threads (${MAX_CONCURRENT_THREADS}) reached.`, "warning");
         }
     }
     updateWatchedThreads();
@@ -1138,12 +1183,8 @@ function closeThread(threadId) {
             thread.error = false;
             const activeCount = watchedThreads.filter(t => t.active && !t.error && !t.closed).length;
             if (activeCount < MAX_CONCURRENT_THREADS) {
-                log(`Activating re-opened thread "${thread.title}" (${threadId})`, "info");
+                log(`Activating re-opened thread "${thread.title}" (${thread.id})`, "info");
                 thread.active = true;
-                isRunning = true;
-                chrome.storage.local.set({
-                    isRunning
-                });
                 manageThreads();
             } else {
                 log(`Thread ${threadId} re-opened but remains paused (max concurrent threads reached).`, "warning");
@@ -1157,6 +1198,7 @@ function closeThread(threadId) {
             thread.active = false;
             thread.error = false;
             threadProgressTimers.delete(thread.id);
+			updateTimersInStorage();
             activeDownloads.forEach((downloadId, key) => {
                 if (key.startsWith(`${threadId}-`)) {
                     if (key.endsWith('-processing')) {
@@ -1173,13 +1215,9 @@ function closeThread(threadId) {
                     }
                 }
             });
-            isRunning = watchedThreads.some(t => t.active && !t.closed);
-            chrome.storage.local.set({
-                isRunning
-            });
             updateWatchedThreads();
             debouncedUpdateUI();
-            if (wasActive && isRunning) {
+            if (wasActive && isAnyThreadActive()) { // CHANGED: Use helper
                 checkForNewThreads();
             }
         }
@@ -1213,14 +1251,11 @@ function removeThread(threadId) {
         const wasActive = thread.active;
         watchedThreads.splice(threadIndex, 1);
         threadProgressTimers.delete(threadId);
+		updateTimersInStorage();
         log(`Thread "${thread.title}" (${threadId}) removed. ${watchedThreads.length} threads remaining.`, "success");
-        isRunning = watchedThreads.some(t => t.active && !t.closed);
-        chrome.storage.local.set({
-            isRunning
-        });
         updateWatchedThreads();
         debouncedUpdateUI();
-        if (wasActive && isRunning) {
+        if (wasActive && isAnyThreadActive()) { // CHANGED: Use helper
             checkForNewThreads();
         }
     } else {
@@ -1283,11 +1318,8 @@ function removeAllThreads() {
     });
     watchedThreads = [];
     threadProgressTimers.clear();
-    isRunning = false;
+	updateTimersInStorage();
     log(`All threads removed.`, "success");
-    chrome.storage.local.set({
-        isRunning: false
-    });
     updateWatchedThreads();
     debouncedUpdateUI();
 }
@@ -1298,6 +1330,7 @@ function forgetAllDownloads() {
     activeDownloads.clear();
     downloadLocks.clear();
     threadProgressTimers.clear();
+	updateTimersInStorage();
     watchedThreads.forEach(thread => {
         thread.skippedImages = new Set();
         thread.downloadedCount = 0;
@@ -1314,7 +1347,7 @@ function forgetAllDownloads() {
     updateWatchedThreads();
     log(`All download history cleared. Reset counts/errors for ${watchedThreads.length} threads.`, "success");
     debouncedUpdateUI();
-    if (isRunning) {
+    if (isAnyThreadActive()) { // CHANGED: Use helper
         manageThreads();
     }
 }
@@ -1396,12 +1429,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     new Promise(resolve => chrome.alarms.get("manageThreads", resolve)).then(alarm => {
         const nextTime = alarm?.scheduledTime || null;
         sendResponse({
-            isRunning: watchedThreads.some(t => t.active && !t.closed),
+            isRunning: isAnyThreadActive(), // CHANGED: Use helper
             watchedThreads: watchedThreads.map(thread => ({
                 ...thread,
                 skippedImages: Array.from(thread.skippedImages || new Set()),
                 downloadedCount: thread.downloadedCount || 0,
-                totalImages: thread.totalImages || 0
+                totalImages: thread.totalImages || 0,
+                timerStartTime: threadProgressTimers.get(thread.id) || null
             })),
             trackedDownloads: downloadedImages.size,
             watchJobs: watchJobs,
@@ -1411,18 +1445,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             populateHistory: populateHistory,
             hideDownloadIcon: hideDownloadIcon,
             prependParentName: prependParentName,
-            hideClosedThreads: hideClosedThreads, // Add this line
+            hideClosedThreads: hideClosedThreads,
             requestId: message.requestId || 0
         });
     }).catch(error => {
         log(`Error getting alarm status for getStatus: ${error.message}`, "error");
         sendResponse({
-            isRunning: watchedThreads.some(t => t.active && !t.closed),
+            isRunning: isAnyThreadActive(), // CHANGED: Use helper
             watchedThreads: watchedThreads.map(thread => ({
                 ...thread,
                 skippedImages: Array.from(thread.skippedImages || new Set()),
                 downloadedCount: thread.downloadedCount || 0,
-                totalImages: thread.totalImages || 0
+                totalImages: thread.totalImages || 0,
+                timerStartTime: threadProgressTimers.get(thread.id) || null
             })),
             trackedDownloads: downloadedImages.size,
             watchJobs: watchJobs,
@@ -1432,7 +1467,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             populateHistory: populateHistory,
             hideDownloadIcon: hideDownloadIcon,
             prependParentName: prependParentName,
-            hideClosedThreads: hideClosedThreads, // Add this line
+            hideClosedThreads: hideClosedThreads,
             error: "Failed to retrieve alarm status",
             requestId: message.requestId || 0
         });
@@ -1563,13 +1598,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             });
             break;
         case 'addWatchJob':
-            if (!isRunning) {
-                isRunning = true;
-                chrome.storage.local.set({
-                    isRunning: true
-                });
-                log("User initiated 'Add Watch Job', starting process.", "info");
-            }
+            // REMOVED: No need to check or set isRunning.
+            log("User initiated 'Add Watch Job'.", "info");
             addWatchJob(message.board, message.searchTerm).then(jobSuccess => sendResponse({
                 success: jobSuccess
             }));
@@ -1581,14 +1611,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             });
             break;
         case 'checkAllWatchJobs':
-            log("Manual 'Check All' triggered.", "info");
-            if (!isRunning) {
-                isRunning = true;
-                chrome.storage.local.set({
-                    isRunning: true
-                });
-                log("User initiated 'Check All', starting process.", "info");
-            }
+            //log("Manual 'Check All' triggered.", "info");
+            // REMOVED: No need to check or set isRunning.
             checkForNewThreads().then(() => sendResponse({
                 success: true
             }));
@@ -1664,7 +1688,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     
     chrome.downloads.setShelfEnabled(!hideDownloadIcon);
-    log(`Download shelf ${hideDownloadIcon ? 'disabled' : 'enabled'}`, "info");
+    //log(`Download shelf ${hideDownloadIcon ? 'disabled' : 'enabled'}`, "info");
     
     // Only trigger dud download if we're enabling the shelf
     if (!hideDownloadIcon) {
@@ -1679,7 +1703,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 if (chrome.runtime.lastError) {
                     log(`Failed to start temp download: ${chrome.runtime.lastError.message}`, "warning");
                 } else {
-                    log(`Started temp download ${downloadId} to trigger shelf`, "debug");
+                    //log(`Started temp download ${downloadId} to trigger shelf`, "debug");
                     // Immediately cancel and erase this download
                     setTimeout(() => {
                         chrome.downloads.cancel(downloadId, () => {
@@ -1713,15 +1737,29 @@ case 'updateHideClosedSetting':
 
 async function initializeState(result) {
     log("Initializing state from storage...", "info");
+
+    try {
+        const sessionData = await chrome.storage.session.get(['controlWindowId']);
+        if (sessionData.controlWindowId) {
+            await chrome.windows.get(sessionData.controlWindowId);
+            windowId = sessionData.controlWindowId;
+            //log(`Restored control window ID ${windowId} from session.`, "info");
+        }
+    } catch (e) {
+        log(`Control window session was present but the window was not found. Clearing session data.`, "warning");
+        windowId = null;
+        await chrome.storage.session.remove('controlWindowId');
+    }
+
     isInitialized = false;
     MAX_CONCURRENT_THREADS = result.maxConcurrentThreads || 5;
     downloadPath = (result.downloadPath || '4chan_downloads').replace(/^\/+|\/+$/g, '');
     populateHistory = typeof result.populateHistory === 'boolean' ? result.populateHistory : true;
     hideDownloadIcon = !!result.hideDownloadIcon;
     prependParentName = !!result.prependParentName;
-    hideClosedThreads = !!result.hideClosedThreads; // Add this line
+    hideClosedThreads = !!result.hideClosedThreads;
     chrome.downloads.setShelfEnabled(!hideDownloadIcon);
-    log(`Max concurrent threads: ${MAX_CONCURRENT_THREADS}, Populate History: ${populateHistory}, Hide DL Icon: ${hideDownloadIcon}, Prepend PName: ${prependParentName}, Hide Closed: ${hideClosedThreads}`);
+    //log(`Max concurrent threads: ${MAX_CONCURRENT_THREADS}, Populate History: ${populateHistory}, Hide DL Icon: ${hideDownloadIcon}, Prepend PName: ${prependParentName}, Hide Closed: ${hideClosedThreads}`);
     watchedThreads = result.watchedThreads || [];
     let totalCorrectedCount = 0;
     watchedThreads.forEach(thread => {
@@ -1787,17 +1825,23 @@ async function initializeState(result) {
             bannedUsernames: []
         });
     }
-    isRunning = result.isRunning || false;
-    const actualRunning = watchedThreads.some(t => t.active && !t.closed);
-    if (isRunning !== actualRunning) {
-        log(`Correcting isRunning state: ${isRunning} -> ${actualRunning}`, "info");
-        isRunning = actualRunning;
-        chrome.storage.local.set({
-            isRunning: actualRunning
-        });
+    // Load and restore thread progress timers from storage
+    if (result.threadProgressTimers && Array.isArray(result.threadProgressTimers)) {
+        try {
+            threadProgressTimers = new Map(result.threadProgressTimers);
+            //log(`Restored ${threadProgressTimers.size} active close timers from storage.`, "info");
+        } catch (e) {
+            log(`Error converting stored threadProgressTimers to Map, resetting. Error: ${e.message}`, "error");
+            threadProgressTimers = new Map();
+            chrome.storage.local.remove("threadProgressTimers");
+        }
+    } else {
+        threadProgressTimers = new Map();
     }
+	
+	
     updateWatchedThreads();
-    log(`Initialization complete. ${watchedThreads.length} threads loaded.`, "info");
+    //log(`Initialization complete. ${watchedThreads.length} threads loaded.`, "info");
     isInitialized = true;
     cleanupOldDownloads();
 }
@@ -1806,8 +1850,8 @@ async function initializeState(result) {
 
 chrome.storage.local.get(null, async (result) => {
     await initializeState(result);
-    if (isRunning) {
-        log("Service worker restart: isRunning was true, attempting to sync/process active threads.", "info");
+    if (isAnyThreadActive()) { 
+        log("Active threads found, attempting to sync/process.", "happy");
         resumeActiveThreads().catch(err => log(`Resume/Sync failed after restart: ${err.message}`, "error"));
     }
     setupAlarms();
@@ -1818,7 +1862,6 @@ chrome.windows.onRemoved.addListener((closedWindowId) => {
         if (result.controlWindowId && result.controlWindowId === closedWindowId) {
             log(`Control window ${closedWindowId} closed. Pausing all threads and resetting Hide DL Icon.`, "info");
             
-            // Reset Hide DL Icon setting first
             if (hideDownloadIcon) {
                 hideDownloadIcon = false;
                 chrome.storage.local.set({
@@ -1827,7 +1870,6 @@ chrome.windows.onRemoved.addListener((closedWindowId) => {
                 chrome.downloads.setShelfEnabled(true);
                 log(`Hide Download Icon automatically unchecked on window close`, "info");
                 
-                // Trigger a small download to force shelf visibility across all windows
                 setTimeout(() => {
                     const dataUrl = 'data:text/plain;base64,ZHVkCg=='; // "dud" in base64
                     chrome.downloads.download({
@@ -1838,8 +1880,7 @@ chrome.windows.onRemoved.addListener((closedWindowId) => {
                         if (chrome.runtime.lastError) {
                             log(`Failed to start temp download for shelf restore: ${chrome.runtime.lastError.message}`, "warning");
                         } else {
-                            log(`Started temp download ${downloadId} to restore shelf visibility`, "debug");
-                            // Immediately cancel and erase this download
+                            //log(`Started temp download ${downloadId} to restore shelf visibility`, "debug");
                             setTimeout(() => {
                                 chrome.downloads.cancel(downloadId, () => {
                                     setTimeout(() => {

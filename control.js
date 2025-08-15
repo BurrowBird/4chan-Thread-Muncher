@@ -31,6 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const threadsDiv = document.getElementById("threads");
   const countdownSpan = document.getElementById("countdown-timer");
   const bannedUsersList = document.getElementById("banned-users-list");
+  const threadsContainer = document.getElementById("threads-container");
   const banManagementDiv = document.getElementById("ban-management");
   const banToggle = document.getElementById("ban-toggle");
 
@@ -142,6 +143,16 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+ function applyLayoutState() {
+    if (hideClosedToggle.checked) {
+      // When hiding inactive threads, reduce the container's minimum height
+      threadsContainer.style.minHeight = '20px';
+    } else {
+      // Otherwise, restore it to its default minimum height
+      threadsContainer.style.minHeight = '200px';
+    }
+  }
+  
   function applyDarkMode() {
     if (darkMode) {
       document.body.classList.add("dark-mode");
@@ -168,6 +179,7 @@ document.addEventListener("DOMContentLoaded", () => {
             prependParentNameToggle.checked = status.prependParentName;
             hideClosedToggle.checked = status.hideClosedThreads;
             updateUI(status);
+			applyLayoutState();
           }
         });
       }
@@ -375,6 +387,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <span class="thread-count"></span>
         <span class="thread-title"></span>
         <span class="thread-creation"></span>
+        <span class="thread-timer-visual"></span>
       </div>
       <div class="thread-buttons">
         <button class="toggleBtn"></button>
@@ -415,6 +428,27 @@ document.addEventListener("DOMContentLoaded", () => {
     toggleBtn.disabled = isClosed;
     const newCloseBtnText = isClosed ? "Re-open" : "Close";
     if (closeBtn.textContent !== newCloseBtnText) closeBtn.textContent = newCloseBtnText;
+
+    const timerVisualSpan = element.querySelector(".thread-timer-visual");
+    if (thread.timerStartTime) {
+        const STUCK_TIMER_MS = 5 * 60 * 1000;
+        const CHECK_INTERVAL_MS = 1 * 60 * 1000;
+        const elapsedTime = Date.now() - thread.timerStartTime;
+        const totalIntervals = Math.ceil(STUCK_TIMER_MS / CHECK_INTERVAL_MS);
+        const intervalsPassed = Math.floor(elapsedTime / CHECK_INTERVAL_MS);
+        const filledSquares = Math.min(totalIntervals, intervalsPassed + 1);
+        const emptySquares = Math.max(0, totalIntervals - filledSquares);
+        const visualText = '■'.repeat(filledSquares) + '□'.repeat(emptySquares);
+        if (timerVisualSpan.textContent !== visualText) {
+            timerVisualSpan.textContent = visualText;
+        }
+        timerVisualSpan.title = `Thread is complete. Auto-closing in approx. ${Math.round(Math.max(0, STUCK_TIMER_MS - elapsedTime) / 1000)}s.`;
+    } else {
+        if (timerVisualSpan.textContent !== '') {
+            timerVisualSpan.textContent = '';
+            timerVisualSpan.title = '';
+        }
+    }
   }
 
   function updateThreadsList(threads, hideClosed = false) {
@@ -590,20 +624,23 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   
   hideClosedToggle.addEventListener("change", () => {
-  const isChecked = hideClosedToggle.checked;
+    // Apply the visual change immediately
+    applyLayoutState(); 
   
-  chrome.runtime.sendMessage({ type: "updateHideClosedSetting", value: isChecked }, (response) => {
-    if (response?.success) {
-      // The setting was saved. Now, tell the UI to re-render the list
-      // with the new setting applied.
-      requestStatusUpdate();
-    } else {
-      // If the background script fails for some reason, revert the click.
-      hideClosedToggle.checked = !isChecked;
-      appendLog("Failed to update 'Hide Closed' setting.", "error");
-    }
+    const isChecked = hideClosedToggle.checked;
+    chrome.runtime.sendMessage({ type: "updateHideClosedSetting", value: isChecked }, (response) => {
+      if (response?.success) {
+        // The setting was saved. Re-render the list with the new filter.
+        requestStatusUpdate();
+      } else {
+        // If the background script fails, revert the click and the layout change.
+        hideClosedToggle.checked = !isChecked;
+        applyLayoutState(); 
+        appendLog("Failed to update 'Hide Inactive' setting.", "error");
+      }
+    });
   });
-});
+
 
   addWatchJobBtn.addEventListener("click", () => {
     const searchTerm = searchTermInput.value.trim();
@@ -651,7 +688,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   checkAllBtn.addEventListener("click", () => {
-    appendLog("Manually checking all watch jobs...", "info");
+    //appendLog("Manually checking all watch jobs...", "info");
     checkAllBtn.disabled = true;
     chrome.runtime.sendMessage({ type: "checkAllWatchJobs" }, () => {
       checkAllBtn.disabled = false;
