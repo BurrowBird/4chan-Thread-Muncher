@@ -27,7 +27,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 <br>
 
 ## CHANGELOG:
-**Next Update**  
+**2025-08-15c**  
 ・ $\color{Lime}{\textsf{Added}}$ a visual indicator for time left before a thread auto-closes.  
 ・ $\color{Purple}{\textsf{Improved}}$ spacing of some UI elements.  
 ・ $\color{Purple}{\textsf{Improved}}$ heartbeat mechanisms to help with timing out issues.  
@@ -62,6 +62,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
