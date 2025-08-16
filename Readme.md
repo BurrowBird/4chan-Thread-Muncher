@@ -21,7 +21,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 <br>
 
 ## KNOWN ISSUES:
-・$\color{Red}{\textsf{FIX ASAP}}$: Watch jobs don't pause on muncher window exit.  
+・$\color{Red}{\textsf{FIX ASAP}$: Watch jobs don't pause on muncher window exit.  
 ・ Various issues related to the Muncher window not being focused and then timing out.  
         - Likely stems from the browser aggressively trying to free resources.  
 
@@ -57,6 +57,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
