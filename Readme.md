@@ -28,7 +28,6 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 
 ## CHANGELOG:
 **2025-08-17**  
-・ $\color{Yellow}{\textsf{Fixed}}$: Watch jobs don't pause on muncher window exit.  
 ・ $\color{Lime}{\textsf{Added}}$ a visual indicator for time left before a thread auto-closes.  
 ・ $\color{Lime}{\textsf{Added}}$ a "Hide Inactive" checkbox. Hides closed or errored threads from the list.  
 ・ $\color{Lime}{\textsf{Added}}$ a "Add PName" checkbox. Prepends name of parent folders to files. (parentname｜filename.ext)  
@@ -40,6 +39,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 ・ $\color{Yellow}{\textsf{Fixed}}$: Stuck timer never closing a thread.  
 ・ $\color{Yellow}{\textsf{Fixed}}$: UI can disappear if unfocused and needs a manual refocus.  
 ・ $\color{Yellow}{\textsf{Fixed}}$: Some UI elements don't update until the window is manually refocused.  
+・ $\color{Yellow}{\textsf{Fixed}}$: Watch jobs don't pause on muncher window exit.  
 ・ $\color{Red}{\textsf{Removed}}$ content-script.js - no longer needed.  
 ・ $\color{Red}{\textsf{Removed}}$ activeTab permission - no longer needed.  
 
@@ -57,6 +57,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
