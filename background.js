@@ -601,6 +601,11 @@ async function processThread(thread) {
 
 
 async function manageThreads() {
+    if (!windowId) {
+        // No UI window is open, so we should not be processing anything.
+        return;
+    }
+
     if (!isInitialized) {
         log("manageThreads: Waiting for initialization.", "info");
         return;
@@ -1136,7 +1141,7 @@ function toggleThread(threadId) {
         return;
     }
     if (thread.active) {
-        log(`Pausing thread "${thread.title}" (${threadId})`, "info");
+        log(`Pausing thread "${thread.title}" (${thread.id})`, "info");
         thread.active = false;
         threadProgressTimers.delete(thread.id);
 		updateTimersInStorage();
@@ -1178,7 +1183,7 @@ function closeThread(threadId) {
     const thread = watchedThreads.find(t => t.id === threadId);
     if (thread) {
         if (thread.closed) {
-            log(`Re-opening thread "${thread.title}" (${threadId}).`, "info");
+            log(`Re-opening thread "${thread.title}" (${thread.id}).`, "info");
             thread.closed = false;
             thread.error = false;
             const activeCount = watchedThreads.filter(t => t.active && !t.error && !t.closed).length;
@@ -1192,7 +1197,7 @@ function closeThread(threadId) {
             updateWatchedThreads();
             debouncedUpdateUI();
         } else {
-            log(`Closing thread "${thread.title}" (${threadId})`, "info");
+            log(`Closing thread "${thread.title}" (${thread.id})`, "info");
             const wasActive = thread.active;
             thread.closed = true;
             thread.active = false;
