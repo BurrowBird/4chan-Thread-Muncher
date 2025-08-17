@@ -21,13 +21,15 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 <br>
 
 ## KNOWN ISSUES:
-・ $\color{Red}{\textsf{FIX ASAP}}$: Watch jobs don't pause on muncher window exit.  
 ・ Various issues related to the Muncher window not being focused and then timing out.  
         - Likely stems from the browser aggressively trying to free resources.  
 
 <br>
 
 ## CHANGELOG:
+**2025-08-17**  
+・ $\color{Yellow}{\textsf{Fixed}}$: Watch jobs don't pause on muncher window exit.  
+
 **2025-08-15c**  
 ・ $\color{Lime}{\textsf{Added}}$ a visual indicator for time left before a thread auto-closes.  
 ・ $\color{Lime}{\textsf{Added}}$ a "Hide Inactive" checkbox. Hides closed or errored threads from the list.  
@@ -57,6 +59,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
