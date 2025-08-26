@@ -21,8 +21,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 <br>
 
 ## KNOWN ISSUES:
-・ Various issues related to the Muncher window not being focused and then timing out.  
-        - Likely stems from the browser aggressively trying to free resources.  
+・ Issues related to the Muncher window not being focused and then timing out in various ways.  
 ・ "Check All" button broken in latest version? Seems to do nothing now.  
 
 <br>
@@ -58,6 +57,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
