@@ -21,16 +21,44 @@ let prependParentName = false;
 let isQueueProcessing = false;
 let hideClosedThreads = false;
 
+const targetPathMap = new Map();
 const STUCK_TIMER = 5 * 60 * 1000;
 const MANAGE_THREADS_INTERVAL = 1;
 const RATE_LIMIT_MS = 1500;
 const MAX_DOWNLOADED_IMAGES = 18000;
 const MIN_RESUME_INTERVAL = 1000;
 const MAX_RETRIES = 3;
-const DOWNLOAD_TIMEOUT_MS = 60000;
+const DOWNLOAD_TIMEOUT_MS = 30000;
 const requestQueue = [];
 const API_REQUEST_INTERVAL = 1100;
 
+chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
+    // Check if we have a custom path waiting for this URL
+    if (targetPathMap.has(item.url)) {
+        const customPath = targetPathMap.get(item.url);
+        targetPathMap.delete(item.url); // Clean up memory
+        
+        // Force the suggestion
+        suggest({
+            filename: customPath,
+            conflictAction: 'uniquify'
+        });
+    } else {
+        // Let Chrome handle it normally
+        suggest(); 
+    }
+});
+
+// Helper to strip illegal characters for Windows/Linux/Mac
+function sanitizeComponent(name) {
+    if (!name) return "unknown";
+    // Remove illegal chars: < > : " / \ | ? * and control characters
+    // Remove leading/trailing dots and spaces
+    return String(name)
+        .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
+        .replace(/^\.+|\.+$/g, "")
+        .trim() || "unknown";
+}
 
 // Saves the current state of threadProgressTimers to local storage.
 function updateTimersInStorage() {
@@ -52,23 +80,38 @@ function isAnyThreadActive() {
 async function fetchWithRetry(url) {
   for (let i = 0; i < MAX_RETRIES; i++) {
     try {
-      const response = await fetch(url, {
+      // 1. Create a new URL object to easily add a cache-busting parameter.
+      const uniqueUrl = new URL(url);
+      
+      // 2. Add a unique query parameter to the URL. This is the most effective
+      //    way to ensure no proxy/cache serves a stale response.
+      uniqueUrl.searchParams.append('_', Date.now());
+
+      // 3. Perform the fetch with headers that explicitly forbid caching.
+      const response = await fetch(uniqueUrl.toString(), {
         method: 'GET',
+        // 4. `no-store` is the strongest directive, telling the browser and proxies
+        //    not to store any part of the request or response.
+        cache: 'no-store', 
+        headers: {
+          // 5. Explicitly set headers for good measure, covering older systems.
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache', // For HTTP/1.0 compatibility
+          'Expires': '0',
+        },
       });
 
       if (!response.ok) {
+        // We can now get the specific status code, which is more informative.
         const errorText = `API fetch failed with status: ${response.status} ${response.statusText}`;
         log(`${errorText} for ${url}`, "warning");
         
+        // If the proxy error persists, we throw to retry.
         if (response.status === 407) {
            throw new Error("Proxy Authentication Required");
         }
         
-        // If we get rate limited (429) or Forbidden (403), wait 5 seconds before retrying
-        if (response.status === 429 || response.status === 403) {
-             await new Promise(resolve => setTimeout(resolve, 5000));
-        }
-        
+        // For other errors, also throw to retry as before.
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
       
@@ -76,6 +119,8 @@ async function fetchWithRetry(url) {
       return data; // Success!
 
     } catch (error) {
+      //log(`API fetch attempt ${i + 1}/${MAX_RETRIES} for ${url} failed: ${error.message}`, "warning");
+      
       if (i === MAX_RETRIES - 1) {
         log(`Max retries reached for ${url}, giving up fetch`, "error");
         throw error;
@@ -164,201 +209,209 @@ function log(message, type = "info") {
 
 
 function getFullPath(threadId, username, filename) {
-    const sanitizedUsername = username ? username.replace(/[^a-zA-Z0-9_.-]/g, "_") : "Anonymous";
-    let sanitizedFilename = filename ? filename.replace(/[^a-zA-Z0-9_.-]/g, "_") : "unknown_file";
-    const cleanDownloadPath = downloadPath.replace(/^\/+|\/+$/g, '');
+    // 1. Sanitize Inputs
+    const safeThreadId = sanitizeComponent(threadId);
+    const safeUsername = sanitizeComponent(username || "Anonymous");
+    
+    // Remove query parameters from filename (e.g., image.jpg?123 -> image.jpg)
+    let rawFilename = (filename || "unknown_file").split('?')[0]; 
+    let safeFilename = sanitizeComponent(rawFilename);
 
+    // 2. Handle "Add PName" (Double Username Fix)
+    // Only adds "User-" if the filename doesn't already start with "User-"
     if (prependParentName) {
-        sanitizedFilename = `${sanitizedUsername}｜${sanitizedFilename}`;
+        const prefix = `${safeUsername}｜`;
+        if (!safeFilename.startsWith(prefix)) {
+            safeFilename = `${prefix}${safeFilename}`;
+        }
     }
 
-    return `${cleanDownloadPath}/${threadId}/${sanitizedUsername}/${sanitizedFilename}`;
+    // 3. Process Download Path
+    // Remove C:, convert backslashes to forward slashes, remove leading/trailing slashes
+    let rawPath = (downloadPath && downloadPath.trim()) ? downloadPath : '4chan';
+    let cleanPath = rawPath.replace(/^[a-zA-Z]:/, "").replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+    
+    // 4. Build Path Array (filters out empty segments to prevent double slashes)
+    const pathSegments = cleanPath.split('/').map(sanitizeComponent);
+    const parts = [
+        ...pathSegments,
+        safeThreadId,
+        safeUsername,
+        safeFilename
+    ];
+
+    return parts.filter(p => p && p.length > 0).join('/');
 }
 
 async function downloadImage(url, threadId, username) {
-    const filename = url.split('/').pop();
+    const rawFilename = url.split('/').pop().split('?')[0];
+
+    // 1. Fetch settings
+    const settings = await new Promise(resolve => {
+        chrome.storage.local.get(
+            ['downloadPath', 'prependParentName', 'bannedUsernames', 'populateHistory'],
+            resolve
+        );
+    });
+
+    const cfgPath = settings.downloadPath ? settings.downloadPath.trim() : '4chan_downloads';
+    const cfgPrepend = !!settings.prependParentName;
+    const cfgHistory = !!settings.populateHistory;
+    const cfgBanned = new Set(settings.bannedUsernames || []);
+
+    // 2. Thread Check
     const thread = watchedThreads.find(t => t.id === threadId);
     if (!thread) {
         log(`Thread ${threadId} not found for ${url}`, "error");
-        return {
-            success: false,
-            downloaded: false
-        };
+        return { success: false, downloaded: false };
     }
-    thread.skippedImages = thread.skippedImages || new Set();
-    thread.downloadedCount = thread.downloadedCount || 0;
-    thread.totalImages = thread.totalImages || 0;
+
+    // 3. Ban Check
     const rawUsernameLower = (username || 'Anonymous').toLowerCase();
-    if (bannedUsernames.has(rawUsernameLower)) {
-        if (!thread.skippedImages.has(filename)) {
-            thread.skippedImages.add(filename);
+    if (cfgBanned.has(rawUsernameLower)) {
+        if (!thread.skippedImages.has(rawFilename)) {
+            thread.skippedImages.add(rawFilename);
             thread.downloadedCount = Math.min(thread.skippedImages.size, thread.totalImages);
-            log(`Skipped image ${filename} for thread ${threadId}: User "${username}" is banned. Count: ${thread.downloadedCount}/${thread.totalImages}`, "info");
+            log(`Skipped banned user image: ${rawFilename}`, "info");
             updateWatchedThreads();
             debouncedUpdateUI();
         }
-        return {
-            success: true,
-            downloaded: false
-        };
+        return { success: true, downloaded: false };
     }
-    const fullPath = getFullPath(threadId, username, filename);
-    const downloadKey = `${threadId}-${filename}`;
-    if (downloadLocks.has(downloadKey)) {
-        await downloadLocks.get(downloadKey);
+
+    // 4. SANITIZATION HELPER
+    const clean = (input) => {
+        const str = String(input || "unknown");
+        return str
+            .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
+            .replace(/^\.+|\.+$/g, "")
+            .trim();
+    };
+
+    // 5. Construct Safe Path
+    const safeThreadId = clean(threadId);
+    const safeUsername = clean(username || "Anonymous");
+    let safeFilename = clean(rawFilename);
+
+    if (cfgPrepend) {
+        const prefix = `${safeUsername}｜`;
+        if (!safeFilename.startsWith(prefix)) {
+            safeFilename = `${prefix}${safeFilename}`;
+        }
     }
+
+    const pathSegments = cfgPath
+        .replace(/^[a-zA-Z]:/, "")
+        .split(/[/\\]+/)
+        .map(p => clean(p))
+        .filter(p => p.length > 0);
+
+    // Full relative path for Chrome
+    const fullPath = [...pathSegments, safeThreadId, safeUsername, safeFilename].join('/');
+    const downloadKey = `${threadId}-${rawFilename}`;
+
+    // 6. Check Duplicates
+    if (downloadedImages.has(fullPath) || thread.skippedImages.has(rawFilename)) {
+        return { success: true, downloaded: false };
+    }
+
+    // 7. Download Logic
+    if (downloadLocks.has(downloadKey)) await downloadLocks.get(downloadKey);
     let resolveLock;
-    const lockPromise = new Promise(resolve => {
-        resolveLock = resolve;
-    });
-    downloadLocks.set(downloadKey, lockPromise);
+    downloadLocks.set(downloadKey, new Promise(r => resolveLock = r));
+
     try {
-        const isAlreadyDownloaded = downloadedImages.has(fullPath);
-        const isAlreadySkipped = thread.skippedImages.has(filename);
-        if (isAlreadyDownloaded || isAlreadySkipped) {
-            if (!isAlreadySkipped) {
-                thread.skippedImages.add(filename);
-                thread.downloadedCount = Math.min(thread.skippedImages.size, thread.totalImages);
-                updateWatchedThreads();
-            }
-            return {
-                success: true,
-                downloaded: false
-            };
-        }
-        if (!thread.active) {
-            return {
-                success: false,
-                downloaded: false
-            };
-        }
+        if (!thread.active) return { success: false, downloaded: false };
+
         for (let i = 0; i < MAX_RETRIES; i++) {
-            // CHANGED: Check against the specific thread, not a global flag.
-            const currentThreadState = watchedThreads.find(t => t.id === threadId);
-            if (!currentThreadState || !currentThreadState.active) {
-                throw new Error("Process or thread stopped before download attempt");
-            }
             let downloadId = null;
             try {
+                // REGISTER PATH FOR LISTENER
+                targetPathMap.set(url, fullPath);
+
+                // INITIATE DOWNLOAD (NO FILENAME HERE)
                 downloadId = await new Promise((resolve, reject) => {
                     chrome.downloads.download({
-                        url,
-                        filename: fullPath,
-                        conflictAction: 'uniquify'
+                        url: url,
+                        // filename: fullPath,  <-- REMOVED to force onDeterminingFilename to fire
+                        // conflictAction: 'uniquify', <-- REMOVED, handled in listener
+                        saveAs: false
                     }, (id) => {
                         if (chrome.runtime.lastError || id === undefined) {
-                            reject(new Error(`Download initiation failed: ${chrome.runtime.lastError?.message || 'Unknown error or invalid ID'}`));
+                            targetPathMap.delete(url); // Cleanup if failed
+                            reject(new Error(chrome.runtime.lastError ? chrome.runtime.lastError.message : "Unknown error"));
                         } else {
                             resolve(id);
                         }
                     });
                 });
+
                 activeDownloads.set(downloadKey, downloadId);
-                const downloadResult = await new Promise((resolve, reject) => {
-                    let listener = null;
-                    const timeoutId = setTimeout(() => {
-                        log(`Download timed out for ${filename} (ID: ${downloadId}) after ${DOWNLOAD_TIMEOUT_MS}ms`, "warning");
-                        if (listener) chrome.downloads.onChanged.removeListener(listener);
-                        activeDownloads.delete(downloadKey);
-                        if (downloadId) {
-                            chrome.downloads.cancel(downloadId, () => {
-                                chrome.downloads.erase({
-                                    id: downloadId
-                                });
-                            });
-                        }
-                        reject(new Error("Download timed out"));
-                    }, DOWNLOAD_TIMEOUT_MS);
+
+                // WAIT FOR COMPLETION
+                await new Promise((resolve, reject) => {
+                    let listener;
+                    const timeout = setTimeout(() => {
+                        chrome.downloads.onChanged.removeListener(listener);
+                        reject(new Error("Timeout"));
+                    }, 30000);
+
                     listener = (delta) => {
                         if (delta.id === downloadId) {
-                            const isComplete = delta.state && delta.state.current === "complete";
-                            const isInterrupted = delta.state && delta.state.current === "interrupted";
-                            if (isComplete) {
-                                clearTimeout(timeoutId);
+                            if (delta.state?.current === "complete") {
+                                clearTimeout(timeout);
                                 chrome.downloads.onChanged.removeListener(listener);
-                                activeDownloads.delete(downloadKey);
-                                if (!populateHistory) {
-                                    chrome.downloads.erase({
-                                        id: downloadId
-                                    });
-                                }
-                                resolve(true);
-                            } else if (isInterrupted) {
-                                clearTimeout(timeoutId);
+                                resolve();
+                            } else if (delta.state?.current === "interrupted") {
+                                clearTimeout(timeout);
                                 chrome.downloads.onChanged.removeListener(listener);
-                                activeDownloads.delete(downloadKey);
-                                log(`Download interrupted for ${filename} (ID: ${downloadId}). Reason: ${delta.error?.current || 'Unknown'}`, "warning");
-                                chrome.downloads.erase({
-                                    id: downloadId
-                                });
-                                reject(new Error(`Download interrupted: ${delta.error?.current || 'Unknown reason'}`));
+                                reject(new Error(delta.error?.current || "Interrupted"));
                             }
                         }
                     };
                     chrome.downloads.onChanged.addListener(listener);
                 });
-                if (downloadResult === true) {
-                    downloadedImages.set(fullPath, {
-                        timestamp: Date.now(),
-                        threadId
-                    });
-                    if (!thread.skippedImages.has(filename)) {
-                        thread.skippedImages.add(filename);
-                    }
-                    thread.downloadedCount = Math.min(thread.skippedImages.size, thread.totalImages);
-                    if (downloadedImages.size > MAX_DOWNLOADED_IMAGES) {
-                        const oldest = Array.from(downloadedImages.entries()).sort((a, b) => a[1].timestamp - b[1].timestamp)[0];
-                        downloadedImages.delete(oldest[0]);
-                    }
-                    chrome.storage.local.set({
-                        downloadedImages: Array.from(downloadedImages.entries())
-                    });
-                    updateWatchedThreads();
-					log({
-						isStructured: true,
-						parts: [
-							{ text: 'Successfully downloaded ' },
-							{ text: filename, style: 'log-filename' },
-							{ text: ' to ', style: 'normal' },
-							{ text: fullPath, style: 'log-path' },
-							{ text: ' for thread ', style: 'normal' },
-							{ text: threadId, style: 'log-thread-id' }
-						]
-					}, "success");
-                    debouncedUpdateUI();
-                    return {
-                        success: true,
-                        downloaded: true
-                    };
-                }
-                throw new Error("Download completion promise resolved unexpectedly.");
-            } catch (error) {
+
+                // SUCCESS
                 activeDownloads.delete(downloadKey);
-                if (downloadId) {
-                    chrome.downloads.erase({
-                        id: downloadId
+                if (!cfgHistory) {
+                    chrome.downloads.erase({ id: downloadId }, () => {
+                         if (chrome.runtime.lastError) {} 
                     });
                 }
-                log(`Download attempt ${i + 1}/${MAX_RETRIES} failed for ${url}: ${error.message}`, "warning");
-                if (i === MAX_RETRIES - 1) {
-                    log(`Max retries reached for ${url}, marking as failed for this run`, "error");
-                } else {
-                    await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_MS * (i + 1)));
-                    const currentThreadStateRetry = watchedThreads.find(t => t.id === threadId);
-                    if (!currentThreadStateRetry || !currentThreadStateRetry.active) {
-                        throw new Error("Thread or process inactive during retry wait");
-                    }
+
+                downloadedImages.set(fullPath, { timestamp: Date.now(), threadId });
+                thread.skippedImages.add(rawFilename);
+                thread.downloadedCount = Math.min(thread.skippedImages.size, thread.totalImages);
+                chrome.storage.local.set({ downloadedImages: Array.from(downloadedImages.entries()) });
+                updateWatchedThreads();
+
+                log({
+                    isStructured: true,
+                    parts: [
+                        { text: 'Saved ' },
+                        { text: safeFilename, style: 'log-filename' },
+                        { text: ' to ', style: 'normal' },
+                        { text: fullPath, style: 'log-path' }
+                    ]
+                }, "success");
+
+                debouncedUpdateUI();
+                return { success: true, downloaded: true };
+
+            } catch (error) {
+                targetPathMap.delete(url); // Ensure map is clean
+                if (downloadId) {
+                    activeDownloads.delete(downloadKey);
+                    chrome.downloads.cancel(downloadId, () => {});
                 }
+                if (i === MAX_RETRIES - 1) throw error;
+                await new Promise(r => setTimeout(r, RATE_LIMIT_MS * (i + 1)));
             }
         }
-        throw new Error(`Download failed permanently for ${filename} after ${MAX_RETRIES} retries`);
     } catch (error) {
-        log(`Failed to download ${filename} for thread ${threadId}: ${error.message}`, "error");
-        activeDownloads.delete(downloadKey);
-        return {
-            success: false,
-            downloaded: false
-        };
+        log(`Failed ${rawFilename}: ${error.message}`, "error");
+        return { success: false, downloaded: false };
     } finally {
         if (resolveLock) resolveLock();
         downloadLocks.delete(downloadKey);
@@ -1741,7 +1794,7 @@ async function initializeState(result) {
 
     isInitialized = false;
     MAX_CONCURRENT_THREADS = result.maxConcurrentThreads || 5;
-    downloadPath = (result.downloadPath || '4chan_downloads').replace(/^\/+|\/+$/g, '');
+    downloadPath = (result.downloadPath || '4chan').replace(/^\/+|\/+$/g, '');
     populateHistory = typeof result.populateHistory === 'boolean' ? result.populateHistory : true;
     hideDownloadIcon = !!result.hideDownloadIcon;
     prependParentName = !!result.prependParentName;
