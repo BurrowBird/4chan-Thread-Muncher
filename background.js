@@ -27,7 +27,7 @@ const RATE_LIMIT_MS = 1500;
 const MAX_DOWNLOADED_IMAGES = 18000;
 const MIN_RESUME_INTERVAL = 1000;
 const MAX_RETRIES = 3;
-const DOWNLOAD_TIMEOUT_MS = 15000;
+const DOWNLOAD_TIMEOUT_MS = 60000;
 const requestQueue = [];
 const API_REQUEST_INTERVAL = 1100;
 
@@ -52,38 +52,23 @@ function isAnyThreadActive() {
 async function fetchWithRetry(url) {
   for (let i = 0; i < MAX_RETRIES; i++) {
     try {
-      // 1. Create a new URL object to easily add a cache-busting parameter.
-      const uniqueUrl = new URL(url);
-      
-      // 2. Add a unique query parameter to the URL. This is the most effective
-      //    way to ensure no proxy/cache serves a stale response.
-      uniqueUrl.searchParams.append('_', Date.now());
-
-      // 3. Perform the fetch with headers that explicitly forbid caching.
-      const response = await fetch(uniqueUrl.toString(), {
+      const response = await fetch(url, {
         method: 'GET',
-        // 4. `no-store` is the strongest directive, telling the browser and proxies
-        //    not to store any part of the request or response.
-        cache: 'no-store', 
-        headers: {
-          // 5. Explicitly set headers for good measure, covering older systems.
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache', // For HTTP/1.0 compatibility
-          'Expires': '0',
-        },
       });
 
       if (!response.ok) {
-        // We can now get the specific status code, which is more informative.
         const errorText = `API fetch failed with status: ${response.status} ${response.statusText}`;
         log(`${errorText} for ${url}`, "warning");
         
-        // If the proxy error persists, we throw to retry.
         if (response.status === 407) {
            throw new Error("Proxy Authentication Required");
         }
         
-        // For other errors, also throw to retry as before.
+        // If we get rate limited (429) or Forbidden (403), wait 5 seconds before retrying
+        if (response.status === 429 || response.status === 403) {
+             await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+        
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
       
@@ -91,8 +76,6 @@ async function fetchWithRetry(url) {
       return data; // Success!
 
     } catch (error) {
-      //log(`API fetch attempt ${i + 1}/${MAX_RETRIES} for ${url} failed: ${error.message}`, "warning");
-      
       if (i === MAX_RETRIES - 1) {
         log(`Max retries reached for ${url}, giving up fetch`, "error");
         throw error;
