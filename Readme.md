@@ -27,6 +27,9 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 <br>
 
 ## CHANGELOG:
+**2025-08-17 [hotfix]**  
+・ $\color{Yellow}{\textsf{Fixed}}$: Unbroke the extension.  
+
 **2025-08-17**  
 ・ $\color{Lime}{\textsf{Added}}$ a visual indicator for time left before a thread auto-closes.  
 ・ $\color{Lime}{\textsf{Added}}$ a "Hide Inactive" checkbox. Hides closed or errored threads from the list.  
@@ -57,6 +60,7 @@ Click the extension icon to open the Muncher window. You may close the tab from 
 
 ---
 *#4chan #Extension #Chrome #AI #Vibe_Coding*
+
 
 
 
